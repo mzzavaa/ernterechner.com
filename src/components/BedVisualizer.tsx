@@ -345,7 +345,7 @@ function BedTopView({ plants, bedWidthCm, bedLengthCm, cursorWeek, onVarietyChan
                         <circle cx={f.fx} cy={f.fy} r={fruitR} fill={currentFruitColor} opacity={0.9} stroke={lerpColor(currentFruitColor, '#000000', 0.3)} strokeWidth={0.5} />
                       </g>
                     ))}
-                    {showRootTip && i === 0 && (
+                    {showRootTip && (
                       <ellipse cx={pos.px} cy={pos.py + radius * 0.6} rx={fruitR} ry={fruitR * 2} fill={currentFruitColor} opacity={0.7} />
                     )}
                   </g>
@@ -594,7 +594,7 @@ function GrowthTimeline({ plants, cursorWeek, setCursorWeek }: {
         <div className="grid grid-cols-12">
           {cal.mo.map((mo, i) => (
             <div key={i} onClick={() => setCursorWeek(Math.round(i * 4.33))}
-              className={`font-mono text-[11px] text-center pb-0.75 cursor-pointer border-b-2 ${i === cursorMonthIdx ? 'text-amber font-bold border-amber' : 'text-text-muted font-normal border-transparent'}`}
+              className={`font-mono text-[8px] tracking-tight sm:text-[11px] sm:tracking-normal text-center pb-0.75 cursor-pointer overflow-hidden border-b-2 ${i === cursorMonthIdx ? 'text-amber font-bold border-amber' : 'text-text-muted font-normal border-transparent'}`}
             >{mo}</div>
           ))}
         </div>
@@ -638,7 +638,7 @@ function GrowthTimeline({ plants, cursorWeek, setCursorWeek }: {
                       let bg = 'transparent', borderColor = 'transparent', label = '';
                       if (isIndoor) { bg = '#4A90C430'; borderColor = '#4A90C455'; }
                       else if (isGrowth) { bg = (vis?.leafColor ?? '#3a7a2a') + '40'; borderColor = (vis?.leafColor ?? '#3a7a2a') + '66'; }
-                      else if (isHarvest) { bg = fruitColor + '70'; borderColor = fruitColor; label = 'E'; }
+                      else if (isHarvest) { bg = fruitColor + '70'; borderColor = fruitColor; label = t('E', 'H'); }
 
                       const hasContent = isIndoor || isGrowth || isHarvest;
                       return (
@@ -667,7 +667,7 @@ function GrowthTimeline({ plants, cursorWeek, setCursorWeek }: {
         {[
           { bg: '#4A90C430', border: '#4A90C455', label: t('Vorkultur', 'Indoor start') },
           { bg: '#3a7a2a40', border: '#3a7a2a66', label: t('Wächst (grün)', 'Growing (green)') },
-          { bg: '#D4A57470', border: '#D4A574', label: t('Erntezeit (E)', 'Harvest time (E)') },
+          { bg: '#D4A57470', border: '#D4A574', label: t('Erntezeit (E)', 'Harvest time (H)') },
         ].map((item, i) => (
           <div key={i} className="flex items-center gap-1.5">
             <div className="w-4 h-2.5 rounded-[3px]" style={{ background: item.bg, border: `1px solid ${item.border}` }} />
