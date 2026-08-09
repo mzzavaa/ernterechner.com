@@ -3,6 +3,17 @@ import { type YieldEntry } from '../data/yieldData';
 import { PLANT_VISUAL_MAP, getPlantStage, lerpColor } from '../data/plantVisuals';
 import { PlantIcon, getPlantDataUri, resolveIconKey, type Stage } from '../icons/plant-icons/PlantIcon.tsx';
 import { useFormat, type Format } from '../units';
+import { useT, useLang } from '../i18n';
+import { WIKI_PLANTS_EN } from '../data/en/plants';
+
+const WIKI_MAP_EN = new Map(WIKI_PLANTS_EN.map(p => [p.id, p]));
+
+// Localised plant display name: English wiki name when EN is active, German otherwise.
+function usePlantName() {
+  const { lang } = useLang();
+  return (e: { plantId: string; name: string }) =>
+    lang === 'en' ? (WIKI_MAP_EN.get(e.plantId)?.name ?? e.name) : e.name;
+}
 
 // "L × W" dimension label sharing one length unit (metric identical to raw cm).
 const dimPair = (fmt: Format, lCm: number, wCm: number) =>
@@ -31,6 +42,8 @@ function DotGridView({ plants, bedWidthCm, bedLengthCm, cursorWeek }: {
   cursorWeek: number;
 }) {
   const fmt = useFormat();
+  const t = useT();
+  const pname = usePlantName();
   const PAD_L = 30;
   const PAD_B = 18;
   const SVG_W = 580;
@@ -117,13 +130,13 @@ function DotGridView({ plants, bedWidthCm, bedLengthCm, cursorWeek }: {
     const zoneW = totalArea > 0 ? (p.areaM2 / totalArea) * plotW : plotW / plants.length;
     const labelX = PAD_L + curLabelX + zoneW / 2;
     curLabelX += zoneW;
-    return { x: labelX, name: p.entry.name, color: PLANT_VISUAL_MAP.get(p.entry.plantId)?.fruitColor ?? p.entry.color };
+    return { x: labelX, name: pname(p.entry), color: PLANT_VISUAL_MAP.get(p.entry.plantId)?.fruitColor ?? p.entry.color };
   });
 
   return (
     <div>
       <div className="font-sans text-[13px] font-semibold text-amber mb-1.5">
-        Pflanzenpositionen · KW {cursorWeek + 1} · {MONTHS_LONG[Math.min(11, Math.floor(cursorMonthFrac))]} ({dimPair(fmt, bedLengthCm, bedWidthCm)})
+        {t('Pflanzenpositionen', 'Plant positions')} · KW {cursorWeek + 1} · {MONTHS_LONG[Math.min(11, Math.floor(cursorMonthFrac))]} ({dimPair(fmt, bedLengthCm, bedWidthCm)})
       </div>
       <svg viewBox={`0 0 ${SVG_W} ${svgH}`} className="w-full rounded-[10px] border border-[rgba(255,255,255,0.08)] bg-bg" style={{ maxHeight: 320 }}>
         {Array.from({ length: Math.floor(bedLengthCm / gridStepCm) + 1 }).map((_, i) => (
@@ -172,11 +185,11 @@ function DotGridView({ plants, bedWidthCm, bedLengthCm, cursorWeek }: {
       <div className="flex flex-wrap gap-x-3 gap-y-1 mt-2">
         {plants.map(p => {
           const stage = getPlantStage(p.entry.sowIndoorMonth, p.entry.sowOutdoorMonth, p.entry.harvestStartMonth, p.entry.harvestEndMonth, cursorMonthFrac);
-          const phaseLabel = stage.phase === 'dormant' ? 'ruhend' : stage.phase === 'harvest' ? 'erntereif' : stage.phase === 'indoor' ? 'Vorkultur' : stage.phase === 'past' ? 'verblüht' : 'wächst';
+          const phaseLabel = stage.phase === 'dormant' ? t('ruhend', 'dormant') : stage.phase === 'harvest' ? t('erntereif', 'ready to harvest') : stage.phase === 'indoor' ? t('Vorkultur', 'indoor start') : stage.phase === 'past' ? t('verblüht', 'spent') : t('wächst', 'growing');
           return (
             <div key={p.entry.plantId} className="flex items-center gap-1.5">
               <PlantIcon plant={resolveIconKey(p.entry.plantId)} stage={stage.phase === 'dormant' ? 'aussaat' : stage.phase === 'indoor' ? 'keimling' : stage.phase === 'growing' ? 'jungpflanze' : 'reif'} size={20} />
-              <span className="font-mono text-[11px] text-text">{p.entry.name}</span>
+              <span className="font-mono text-[11px] text-text">{pname(p.entry)}</span>
               <span className="font-mono text-[11px] text-text-muted">{p.count}x · {phaseLabel}</span>
             </div>
           );
@@ -195,6 +208,8 @@ function BedTopView({ plants, bedWidthCm, bedLengthCm, cursorWeek, onVarietyChan
   onVarietyChange: (plantIdx: number, varIdx: number) => void;
 }) {
   const fmt = useFormat();
+  const t = useT();
+  const pname = usePlantName();
   const svgW = 560;
   const scale = svgW / bedLengthCm;
   const svgH = Math.max(100, bedWidthCm * scale);
@@ -213,7 +228,7 @@ function BedTopView({ plants, bedWidthCm, bedLengthCm, cursorWeek, onVarietyChan
   return (
     <div>
       <div className="font-sans text-[13px] font-semibold text-amber mb-1.5">
-        Draufsicht · KW {cursorWeek + 1} · {MONTHS_LONG[Math.min(11, Math.floor(cursorWeek / 4.33))]} ({dimPair(fmt, bedLengthCm, bedWidthCm)})
+        {t('Draufsicht', 'Top view')} · KW {cursorWeek + 1} · {MONTHS_LONG[Math.min(11, Math.floor(cursorWeek / 4.33))]} ({dimPair(fmt, bedLengthCm, bedWidthCm)})
       </div>
       <svg viewBox={`0 0 ${svgW} ${svgH}`} className="w-full rounded-[10px] border border-[rgba(255,255,255,0.08)] bg-bg" style={{ maxHeight: 280 }}>
         {Array.from({ length: Math.floor(bedLengthCm / 50) + 1 }).map((_, i) => (
@@ -234,10 +249,10 @@ function BedTopView({ plants, bedWidthCm, bedLengthCm, cursorWeek, onVarietyChan
                 <rect x={x} y={0} width={w} height={svgH} fill={e.color} opacity={0.02} />
                 <line x1={x} y1={0} x2={x} y2={svgH} stroke={e.color} strokeWidth={0.5} opacity={0.15} />
                 <text x={x + w / 2} y={svgH / 2} fontSize={9} fill={e.color} textAnchor="middle" fontFamily="monospace" opacity={0.4}>
-                  {e.name}
+                  {pname(e)}
                 </text>
                 <text x={x + w / 2} y={svgH / 2 + 12} fontSize={7} fill="var(--c-sub)" textAnchor="middle" fontFamily="monospace" opacity={0.4}>
-                  noch nicht ausgesät
+                  {t('noch nicht ausgesät', 'not sown yet')}
                 </text>
               </g>
             );
@@ -313,7 +328,7 @@ function BedTopView({ plants, bedWidthCm, bedLengthCm, cursorWeek, onVarietyChan
 
               <rect x={x + 2} y={svgH - 18} width={w - 4} height={16} fill="var(--c-bg)" opacity={0.7} rx={3} />
               <text x={x + w / 2} y={svgH - 7} fontSize={9} fill={vis?.fruitColor ?? e.color} textAnchor="middle" fontFamily="monospace" fontWeight="bold">
-                {e.name} {stage.phase === 'indoor' ? '(Vorkultur)' : ''}
+                {pname(e)} {stage.phase === 'indoor' ? t('(Vorkultur)', '(indoor start)') : ''}
               </text>
             </g>
           );
@@ -329,12 +344,12 @@ function BedTopView({ plants, bedWidthCm, bedLengthCm, cursorWeek, onVarietyChan
           if (!vis || vis.varieties.length <= 1) return (
             <div key={p.entry.plantId} className="flex items-center gap-1">
               <span className="w-2.5 h-2.5 rounded-full shrink-0 border border-[rgba(255,255,255,0.2)]" style={{ background: vis?.fruitColor ?? p.entry.color }} />
-              <span className="font-mono text-[11px] text-text">{p.entry.name} ({p.count}x)</span>
+              <span className="font-mono text-[11px] text-text">{pname(p.entry)} ({p.count}x)</span>
             </div>
           );
           return (
             <div key={p.entry.plantId} className="flex items-center gap-1 flex-wrap">
-              <span className="font-mono text-[11px] text-text-muted">{p.entry.name}:</span>
+              <span className="font-mono text-[11px] text-text-muted">{pname(p.entry)}:</span>
               {vis.varieties.map((v, vi) => (
                 <button key={vi} onClick={() => onVarietyChange(zoneIdx, vi)} title={v.description}
                   className="w-3.5 h-3.5 rounded-full cursor-pointer p-0 shrink-0"
@@ -354,10 +369,10 @@ function BedTopView({ plants, bedWidthCm, bedLengthCm, cursorWeek, onVarietyChan
 
       <div className="flex gap-3 mt-1.5 flex-wrap">
         {[
-          { color: '#3a7a2a', label: 'Laub (immer grün)' },
-          { color: 'var(--c-cyan)', label: 'Frucht unreif' },
-          { color: 'var(--c-amber)', label: 'Frucht reifend' },
-          { color: 'var(--c-red)', label: 'Frucht erntereif' },
+          { color: '#3a7a2a', label: t('Laub (immer grün)', 'Foliage (always green)') },
+          { color: 'var(--c-cyan)', label: t('Frucht unreif', 'Fruit unripe') },
+          { color: 'var(--c-amber)', label: t('Frucht reifend', 'Fruit ripening') },
+          { color: 'var(--c-red)', label: t('Frucht erntereif', 'Fruit ready to harvest') },
         ].map((item, i) => (
           <div key={i} className="flex items-center gap-1">
             <span className="w-2 h-2 rounded-full shrink-0" style={{ background: item.color }} />
@@ -372,6 +387,8 @@ function BedTopView({ plants, bedWidthCm, bedLengthCm, cursorWeek, onVarietyChan
 // ── Side view ─────────────────────────────────────────────────────────────
 function SideView({ plants, cursorWeek }: { plants: VisPlant[]; cursorWeek: number }) {
   const fmt = useFormat();
+  const t = useT();
+  const pname = usePlantName();
   const maxH = Math.max(...plants.map(p => p.entry.heightCm), 50);
   const svgW = 400;
   const svgH = 200;
@@ -382,7 +399,7 @@ function SideView({ plants, cursorWeek }: { plants: VisPlant[]; cursorWeek: numb
   return (
     <div>
       <div className="font-sans text-[13px] font-semibold text-amber mb-1.5">
-        Seitenansicht · KW {cursorWeek + 1} · {MONTHS[Math.min(11, Math.floor(cursorWeek / 4.33))]}
+        {t('Seitenansicht', 'Side view')} · KW {cursorWeek + 1} · {MONTHS[Math.min(11, Math.floor(cursorWeek / 4.33))]}
       </div>
       <svg viewBox={`0 0 ${svgW} ${svgH}`} className="w-full rounded-[10px] border border-[rgba(255,255,255,0.08)] bg-bg" style={{ maxHeight: 200 }}>
         <line x1={0} y1={svgH - 20} x2={svgW} y2={svgH - 20} stroke="#4a3728" strokeWidth={3} />
@@ -416,14 +433,14 @@ function SideView({ plants, cursorWeek }: { plants: VisPlant[]; cursorWeek: numb
             return (
               <g key={e.plantId}>
                 {seedUri && <image href={seedUri} x={x - seedSz / 2} y={baseY - seedSz * 0.75} width={seedSz} height={seedSz} opacity={0.7} />}
-                <text x={x} y={baseY + 14} fontSize={7} fill="var(--c-sub)" textAnchor="middle" fontFamily="monospace" opacity={0.6}>{e.name}</text>
+                <text x={x} y={baseY + 14} fontSize={7} fill="var(--c-sub)" textAnchor="middle" fontFamily="monospace" opacity={0.6}>{pname(e)}</text>
               </g>
             );
           }
 
           if (h < 2) return (
             <g key={e.plantId}>
-              <text x={x} y={baseY + 14} fontSize={7} fill="var(--c-sub)" textAnchor="middle" fontFamily="monospace" opacity={0.4}>{e.name}</text>
+              <text x={x} y={baseY + 14} fontSize={7} fill="var(--c-sub)" textAnchor="middle" fontFamily="monospace" opacity={0.4}>{pname(e)}</text>
             </g>
           );
 
@@ -453,9 +470,9 @@ function SideView({ plants, cursorWeek }: { plants: VisPlant[]; cursorWeek: numb
               ) : (
                 <ellipse cx={x} cy={baseY - h / 2} rx={Math.min(barW * 0.4, h * 0.3)} ry={h / 2} fill={leafColor} opacity={isPast ? 0.25 : 0.45} stroke={leafColor} strokeWidth={1} />
               )}
-              <text x={x} y={baseY + 14} fontSize={7} fill={isPast ? 'var(--c-sub)' : 'var(--c-text)'} textAnchor="middle" fontFamily="monospace" opacity={isPast ? 0.5 : 1}>{e.name}</text>
+              <text x={x} y={baseY + 14} fontSize={7} fill={isPast ? 'var(--c-sub)' : 'var(--c-text)'} textAnchor="middle" fontFamily="monospace" opacity={isPast ? 0.5 : 1}>{pname(e)}</text>
               {!isPast && <text x={x} y={baseY - imgH - 3} fontSize={7} fill={leafColor} textAnchor="middle" fontFamily="monospace">{svgLen(fmt, e.heightCm * stage.plantFraction)}</text>}
-              {isPast && stage.plantFraction > 0.1 && <text x={x} y={baseY - imgH - 3} fontSize={6} fill="var(--c-sub)" textAnchor="middle" fontFamily="monospace" opacity={0.5}>verblüht</text>}
+              {isPast && stage.plantFraction > 0.1 && <text x={x} y={baseY - imgH - 3} fontSize={6} fill="var(--c-sub)" textAnchor="middle" fontFamily="monospace" opacity={0.5}>{t('verblüht', 'spent')}</text>}
             </g>
           );
         })}
@@ -471,6 +488,8 @@ function GrowthTimeline({ plants, cursorWeek, setCursorWeek }: {
   setCursorWeek: (w: number) => void;
 }) {
   const fmt = useFormat();
+  const t = useT();
+  const pname = usePlantName();
   const mFrac = cursorWeek / 4.33;
   const m = mFrac + 1;
   const cursorMonthIdx = Math.min(11, Math.floor(mFrac));
@@ -482,12 +501,12 @@ function GrowthTimeline({ plants, cursorWeek, setCursorWeek }: {
   return (
     <div className="bg-card rounded-xl px-4 pt-4 pb-3 border border-[rgba(255,255,255,0.07)]">
       <div className="font-sans text-[13px] font-semibold text-amber mb-3">
-        Aussaat bis Ernte
+        {t('Aussaat bis Ernte', 'Sowing to harvest')}
       </div>
 
       <div className="mb-3">
         <div className="flex items-center gap-3 mb-2">
-          <span className="font-mono text-[11px] text-text-muted uppercase whitespace-nowrap">Woche:</span>
+          <span className="font-mono text-[11px] text-text-muted uppercase whitespace-nowrap">{t('Woche', 'Week')}:</span>
           <input type="range" min={0} max={51} value={cursorWeek}
             onChange={e => setCursorWeek(+e.target.value)}
             className="flex-1 accent-amber" />
@@ -498,43 +517,43 @@ function GrowthTimeline({ plants, cursorWeek, setCursorWeek }: {
 
         <div className="grid grid-cols-3 gap-2">
           <div className="rounded-lg p-[8px_10px] bg-[rgba(93,143,46,0.07)] border border-[rgba(93,143,46,0.2)]">
-            <div className="font-mono text-[11px] text-text-muted uppercase mb-1">Erntereif · {MONTHS[cursorMonthIdx]}</div>
+            <div className="font-mono text-[11px] text-text-muted uppercase mb-1">{t('Erntereif', 'Ready to harvest')} · {MONTHS[cursorMonthIdx]}</div>
             {harvestableNow.length === 0
-              ? <div className="font-sans text-[11px] text-text-muted">Nichts erntereif</div>
+              ? <div className="font-sans text-[11px] text-text-muted">{t('Nichts erntereif', 'Nothing ready')}</div>
               : harvestableNow.map(p => {
                 const kgPerWeek = ((p.entry.yieldKgPerM2Low + p.entry.yieldKgPerM2High) / 2 / p.entry.harvestWindowWeeks * p.areaM2);
                 return (
                   <div key={p.entry.plantId} className="flex items-center gap-1 mb-0.5">
                     <PlantIcon plant={resolveIconKey(p.entry.plantId)} stage="reif" size={16} />
-                    <span className="font-sans text-[11px] text-text">{p.entry.name}</span>
-                    <span className="font-mono text-[11px] text-text-muted ml-auto">~{fmt.weightVal(kgPerWeek).toFixed(1)} {fmt.weightUnit}/Wo</span>
+                    <span className="font-sans text-[11px] text-text">{pname(p.entry)}</span>
+                    <span className="font-mono text-[11px] text-text-muted ml-auto">~{fmt.weightVal(kgPerWeek).toFixed(1)} {fmt.weightUnit}/{t('Wo', 'wk')}</span>
                   </div>
                 );
               })
             }
           </div>
           <div className="rounded-lg p-[8px_10px] bg-[rgba(74,144,196,0.06)] border border-[rgba(74,144,196,0.13)]">
-            <div className="font-mono text-[11px] text-water uppercase mb-1">Vorkultur drinnen</div>
+            <div className="font-mono text-[11px] text-water uppercase mb-1">{t('Vorkultur drinnen', 'Indoor start')}</div>
             {indoorNow.length === 0
-              ? <div className="font-sans text-[11px] text-text-muted">Nichts</div>
+              ? <div className="font-sans text-[11px] text-text-muted">{t('Nichts', 'Nothing')}</div>
               : indoorNow.map(p => (
                 <div key={p.entry.plantId} className="font-sans text-[11px] text-text mb-0.5">
-                  {p.entry.name} · ab {MONTHS[p.entry.sowOutdoorMonth - 1]} auspflanzen
+                  {pname(p.entry)} · {t('ab', 'plant out from')} {MONTHS[p.entry.sowOutdoorMonth - 1]} {t('auspflanzen', '')}
                 </div>
               ))
             }
           </div>
           <div className="rounded-lg p-[8px_10px] bg-[rgba(255,255,255,0.03)] border border-[rgba(255,255,255,0.06)]">
-            <div className="font-mono text-[11px] text-text-muted uppercase mb-1">Wächst draußen</div>
+            <div className="font-mono text-[11px] text-text-muted uppercase mb-1">{t('Wächst draußen', 'Growing outdoors')}</div>
             {growingNow.length === 0
-              ? <div className="font-sans text-[11px] text-text-muted">Nichts</div>
+              ? <div className="font-sans text-[11px] text-text-muted">{t('Nichts', 'Nothing')}</div>
               : growingNow.map(p => {
                 const e = p.entry;
                 const stage = getPlantStage(e.sowIndoorMonth, e.sowOutdoorMonth, e.harvestStartMonth, e.harvestEndMonth, mFrac);
                 const weeksLeft = Math.round((e.harvestStartMonth - m) * 4.3);
                 return (
                   <div key={e.plantId} className="font-sans text-[11px] text-text mb-0.5">
-                    {e.name} <span className="font-mono text-[11px] text-text-muted">({Math.round(stage.plantFraction * 100)}% · ~{Math.max(0, weeksLeft)} Wo. bis Ernte)</span>
+                    {pname(e)} <span className="font-mono text-[11px] text-text-muted">({Math.round(stage.plantFraction * 100)}% · ~{Math.max(0, weeksLeft)} {t('Wo. bis Ernte', 'wk to harvest')})</span>
                   </div>
                 );
               })
@@ -557,11 +576,11 @@ function GrowthTimeline({ plants, cursorWeek, setCursorWeek }: {
       {plants.map(p => {
         const e = p.entry;
         const vis = PLANT_VISUAL_MAP.get(e.plantId);
-        const rows = [{ offset: 0, label: e.successionalSowings > 1 ? '1. Saat' : '' }];
+        const rows = [{ offset: 0, label: e.successionalSowings > 1 ? t('1. Saat', '1st sowing') : '' }];
         if (e.successionalSowings > 1) {
           const intervalMonths = Math.round(e.harvestWindowWeeks / e.successionalSowings / 4.3);
           for (let s = 1; s < Math.min(e.successionalSowings, 3); s++) {
-            rows.push({ offset: s * intervalMonths, label: `${s + 1}. Saat` });
+            rows.push({ offset: s * intervalMonths, label: `${s + 1}. ${t('Saat', 'sowing')}` });
           }
         }
 
@@ -574,7 +593,7 @@ function GrowthTimeline({ plants, cursorWeek, setCursorWeek }: {
                   <div className="pr-2">
                     {rowIdx === 0 && (
                       <div className="font-sans text-xs font-bold text-text whitespace-nowrap overflow-hidden text-ellipsis">
-                        {e.name}
+                        {pname(e)}
                       </div>
                     )}
                     {row.label && <div className="font-mono text-[11px] text-text-muted">{row.label}</div>}
@@ -619,16 +638,16 @@ function GrowthTimeline({ plants, cursorWeek, setCursorWeek }: {
 
       <div className="flex gap-3.5 mt-2.5 pt-2.5 border-t border-[rgba(255,255,255,0.06)] flex-wrap">
         {[
-          { bg: '#4A90C430', border: '#4A90C455', label: 'Vorkultur' },
-          { bg: '#3a7a2a40', border: '#3a7a2a66', label: 'Wächst (grün)' },
-          { bg: '#D4A57470', border: '#D4A574', label: 'Erntezeit (E)' },
+          { bg: '#4A90C430', border: '#4A90C455', label: t('Vorkultur', 'Indoor start') },
+          { bg: '#3a7a2a40', border: '#3a7a2a66', label: t('Wächst (grün)', 'Growing (green)') },
+          { bg: '#D4A57470', border: '#D4A574', label: t('Erntezeit (E)', 'Harvest time (E)') },
         ].map((item, i) => (
           <div key={i} className="flex items-center gap-1.5">
             <div className="w-4 h-2.5 rounded-[3px]" style={{ background: item.bg, border: `1px solid ${item.border}` }} />
             <span className="font-mono text-[11px] text-text-muted">{item.label}</span>
           </div>
         ))}
-        <span className="font-mono text-[11px] text-text-muted opacity-60">Gestaffelte Reihen = Staffelaussaat</span>
+        <span className="font-mono text-[11px] text-text-muted opacity-60">{t('Gestaffelte Reihen = Staffelaussaat', 'Staggered rows = succession sowing')}</span>
       </div>
     </div>
   );
@@ -637,6 +656,8 @@ function GrowthTimeline({ plants, cursorWeek, setCursorWeek }: {
 // ── Plant info panel ──────────────────────────────────────────────────────
 function PlantInfoPanel({ entry, selectedVarietyIdx }: { entry: YieldEntry; selectedVarietyIdx: number }) {
   const fmt = useFormat();
+  const t = useT();
+  const pname = usePlantName();
   const vis = PLANT_VISUAL_MAP.get(entry.plantId);
   const variety = vis?.varieties[selectedVarietyIdx];
   return (
@@ -646,7 +667,7 @@ function PlantInfoPanel({ entry, selectedVarietyIdx }: { entry: YieldEntry; sele
           <PlantIcon plant={resolveIconKey(entry.plantId)} stage="reif" size={44} />
         </div>
         <div>
-          <h4 className="font-sans text-[1.125rem] font-extrabold text-text m-0">{entry.name}</h4>
+          <h4 className="font-sans text-[1.125rem] font-extrabold text-text m-0">{pname(entry)}</h4>
           {variety && <div className="font-mono text-[11px]" style={{ color: vis?.fruitColor ?? entry.color }}>{variety.name} · {variety.description}</div>}
         </div>
       </div>
@@ -662,12 +683,12 @@ function PlantInfoPanel({ entry, selectedVarietyIdx }: { entry: YieldEntry; sele
       )}
       <div className="grid grid-cols-3 gap-1.5">
         {[
-          { l: 'Höhe', v: fmt.len(entry.heightCm), c: 'var(--c-text)' },
-          { l: 'Abstand', v: fmt.len(entry.spacingCm), c: 'var(--c-cyan)' },
-          { l: 'Pfl/m²', v: `${entry.plantsPerM2}`, c: 'var(--c-green)' },
-          { l: 'Ertrag', v: fmt.densityRange(entry.yieldKgPerM2Low, entry.yieldKgPerM2High), c: 'var(--c-amber)' },
-          { l: 'Ernte', v: `${entry.weeksToHarvest} Wo.`, c: 'var(--c-red)' },
-          { l: 'Lagerung', v: entry.storageMonths > 0 ? `${entry.storageMonths} Mon.` : 'Nur frisch', c: entry.storageMonths > 0 ? 'var(--c-green)' : 'var(--c-sub)' },
+          { l: t('Höhe', 'Height'), v: fmt.len(entry.heightCm), c: 'var(--c-text)' },
+          { l: t('Abstand', 'Spacing'), v: fmt.len(entry.spacingCm), c: 'var(--c-cyan)' },
+          { l: t('Pfl/m²', 'plants/m²'), v: `${entry.plantsPerM2}`, c: 'var(--c-green)' },
+          { l: t('Ertrag', 'Yield'), v: fmt.densityRange(entry.yieldKgPerM2Low, entry.yieldKgPerM2High), c: 'var(--c-amber)' },
+          { l: t('Ernte', 'Harvest'), v: `${entry.weeksToHarvest} ${t('Wo.', 'wk')}`, c: 'var(--c-red)' },
+          { l: t('Lagerung', 'Storage'), v: entry.storageMonths > 0 ? `${entry.storageMonths} ${t('Mon.', 'mo.')}` : t('Nur frisch', 'Fresh only'), c: entry.storageMonths > 0 ? 'var(--c-green)' : 'var(--c-sub)' },
         ].map((d, i) => (
           <div key={i} className="bg-bg rounded-lg p-[6px_8px]">
             <div className="font-mono text-[11px] text-text-muted">{d.l}</div>
@@ -682,6 +703,8 @@ function PlantInfoPanel({ entry, selectedVarietyIdx }: { entry: YieldEntry; sele
 // ── Main ──────────────────────────────────────────────────────────────────
 export default function BedVisualizer({ plants }: { plants: { entry: YieldEntry; areaM2: number }[] }) {
   const fmt = useFormat();
+  const t = useT();
+  const pname = usePlantName();
   // Bed dimensions stay internally in cm (SVG geometry); only the input display converts.
   const bedVal = (cm: number) => fmt.imperial ? Math.round(fmt.lenVal(cm) * 10) / 10 : cm;
   const [selectedPlantId, setSelectedPlantId] = useState<string | null>(null);
@@ -714,7 +737,7 @@ export default function BedVisualizer({ plants }: { plants: { entry: YieldEntry;
   if (visPlants.length === 0) {
     return (
       <div className="bg-card rounded-2xl p-6 text-center">
-        <p className="font-sans text-sm text-text-muted">Füge oben Pflanzen hinzu um die Visualisierung zu sehen.</p>
+        <p className="font-sans text-sm text-text-muted">{t('Füge oben Pflanzen hinzu um die Visualisierung zu sehen.', 'Add plants above to see the visualisation.')}</p>
       </div>
     );
   }
@@ -724,14 +747,14 @@ export default function BedVisualizer({ plants }: { plants: { entry: YieldEntry;
   return (
     <div className="harvest-card">
       <div className="font-display text-[1.25rem] font-bold text-text mb-3.5 tracking-[-0.01em]">
-        Beetvisualisierung
+        {t('Beetvisualisierung', 'Bed visualisation')}
       </div>
 
       <div className="flex gap-4 mb-4 items-center flex-wrap">
         <div className="flex gap-2 items-center">
-          <div className="font-mono text-xs text-amber uppercase">Beet:</div>
+          <div className="font-mono text-xs text-amber uppercase">{t('Beet', 'Bed')}:</div>
           <label className="flex items-center gap-1">
-            <span className="font-mono text-xs text-text-muted">B</span>
+            <span className="font-mono text-xs text-text-muted">{t('B', 'W')}</span>
             <input type="number" value={bedVal(bedWidth)} min={60} max={200} step={10} onChange={e => setBedWidth(Math.round(fmt.lenToMetric(parseFloat(e.target.value))) || 120)}
               className="w-12.5 py-0.75 px-1.25 rounded-[5px] bg-bg border border-[rgba(255,255,255,0.1)] font-mono text-xs text-amber outline-none" />
             <span className="font-mono text-xs text-text-muted">{fmt.lenUnit} ×</span>
@@ -754,7 +777,7 @@ export default function BedVisualizer({ plants }: { plants: { entry: YieldEntry;
       </div>
 
       <div className="flex gap-1 mb-3">
-        {([['dots', 'Pflanzen'], ['zones', 'Beetskizze']] as const).map(([tab, label]) => (
+        {([['dots', t('Pflanzen', 'Plants')], ['zones', t('Beetskizze', 'Bed sketch')]] as const).map(([tab, label]) => (
           <button key={tab} onClick={() => setViewTab(tab)}
             className={`bed-view-tab${viewTab === tab ? ' bed-view-tab--active' : ''}`}>
             {label}
@@ -789,7 +812,7 @@ export default function BedVisualizer({ plants }: { plants: { entry: YieldEntry;
               <button onClick={() => setSelectedPlantId(isSelected ? null : p.entry.plantId)}
                 className="flex items-center gap-1.5 cursor-pointer" style={{ background: 'none', border: 'none', padding: 0 }}>
                 <PlantIcon plant={resolveIconKey(p.entry.plantId)} stage="reif" size={20} />
-                <span className="font-sans text-xs text-text">{p.entry.name}</span>
+                <span className="font-sans text-xs text-text">{pname(p.entry)}</span>
                 <span className="font-mono text-[11px] text-text-muted">{p.count}x</span>
               </button>
               {hasVarieties && (

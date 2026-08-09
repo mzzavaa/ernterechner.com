@@ -850,6 +850,43 @@ mark.search-mark { background: rgba(135,169,107,0.3); color: var(--c-cyan); bord
 .bed-view-tab { font-family: var(--f-sans); font-size: 0.75rem; padding: 5px 14px; border-radius: 8px; cursor: pointer; letter-spacing: 0.06em; text-transform: uppercase; border: 1px solid rgba(255,255,255,0.1); background: transparent; color: rgba(255,255,255,0.38); transition: background 0.12s, color 0.12s, border-color 0.12s; }
 .bed-view-tab--active { background: rgba(212,165,116,0.12); border-color: rgba(212,165,116,0.4); color: var(--c-amber); }
 
+/* ── App header ───────────────────────────────────────────────────────────────
+   Holds the brand, a subtitle and two toggles. Wraps rather than clipping on
+   narrow screens; the subtitle is hidden on phones. Mirrors the wiki header. */
+.app-header {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  border-bottom: 1px solid var(--c-border);
+  background: var(--c-bg-soft);
+}
+.app-header__inner {
+  max-width: 1400px;
+  margin: 0 auto;
+  padding: 0.85rem 1.5rem;
+  display: flex;
+  align-items: center;
+  gap: 8px 10px;
+  flex-wrap: wrap;
+}
+.app-header__subtitle {
+  font-size: 0.7rem;
+  color: var(--c-sub);
+  letter-spacing: 0.04em;
+  margin-left: auto;
+  white-space: nowrap;
+}
+.app-header__tools {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+@media (max-width: 560px) {
+  .app-header__subtitle { display: none; }
+  .app-header__tools { margin-left: auto; }
+}
+
 /* ── YieldCalculator ──────────────────────────────────────────────────────── */
 .yield-config { background: var(--c-card); border: 1px solid rgba(255,255,255,0.07); border-radius: 14px; padding: 14px 18px; margin-bottom: 20px; display: flex; flex-wrap: wrap; gap: 24px; align-items: center; }
 .yield-totals { background: linear-gradient(135deg, rgba(93,143,46,0.07) 0%, var(--c-card) 100%); border: 2px solid rgba(93,143,46,0.2); border-radius: 16px; padding: 20px; margin-bottom: 20px; display: grid; gap: 16px; }

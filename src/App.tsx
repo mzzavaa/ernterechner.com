@@ -1,20 +1,15 @@
 import YieldCalculator from './components/YieldCalculator';
 import { UnitToggle } from './units';
+import { LangToggle, useT } from './i18n';
+import { WIKI_URL } from './links';
 import './index.css';
 
 export default function App() {
+  const t = useT();
   return (
     <div style={{ minHeight: '100svh', display: 'flex', flexDirection: 'column', background: 'var(--c-bg)' }}>
-      <header
-        style={{
-          borderBottom: '1px solid var(--c-border)',
-          background: 'var(--c-bg-soft)',
-          position: 'sticky',
-          top: 0,
-          zIndex: 10,
-        }}
-      >
-        <div style={{ maxWidth: 1400, margin: '0 auto', padding: '0.85rem 1.5rem', display: 'flex', alignItems: 'center', gap: 10 }}>
+      <header className="app-header">
+        <div className="app-header__inner">
           <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="var(--c-green)" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
             <path d="M12 2c3 4 6 5 6 9a6 6 0 0 1-12 0c0-4 3-5 6-9z" />
             <path d="M12 11v9" />
@@ -22,10 +17,13 @@ export default function App() {
           <span style={{ fontFamily: 'var(--f-title)', fontWeight: 700, fontSize: '1.15rem', color: 'var(--c-text)' }}>
             Ernterechner
           </span>
-          <span className="font-mono" style={{ fontSize: '0.7rem', color: 'var(--c-sub)', marginLeft: 'auto', letterSpacing: '0.04em' }}>
-            Gemüsegarten · Ertrag &amp; Beetplanung
+          <span className="app-header__subtitle font-mono">
+            {t('Gemüsegarten · Ertrag & Beetplanung', 'Vegetable garden · Yield & bed planning')}
           </span>
-          <UnitToggle />
+          <div className="app-header__tools">
+            <UnitToggle />
+            <LangToggle />
+          </div>
         </div>
       </header>
 
@@ -39,13 +37,18 @@ export default function App() {
           className="font-sans"
         >
           <span style={{ fontSize: '0.72rem', color: 'var(--c-sub)' }}>
-            Ernterechner · Richtwerte für den Hausgarten · Erträge variieren je nach Standort, Boden und Witterung.
+            {t(
+              'Ernterechner · Richtwerte für den Hausgarten · Erträge variieren je nach Standort, Boden und Witterung.',
+              'Ernterechner · Reference values for the home garden · Yields vary by location, soil and weather.'
+            )}
           </span>
           <a
-            href="https://github.com/mzzavaa/garden-hub-wiki"
+            href={WIKI_URL}
+            target="_blank"
+            rel="noopener noreferrer"
             style={{ fontSize: '0.72rem', color: 'var(--c-green-mid)', textDecoration: 'none' }}
           >
-            Pflanzenwissen im Garten-Wiki →
+            {t('Pflanzenwissen im Garten-Wiki', 'Plant knowledge in the Garden Wiki')} →
           </a>
         </div>
       </footer>
