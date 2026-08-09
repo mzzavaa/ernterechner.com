@@ -1,45 +1,61 @@
-name: Deploy to GitHub Pages
+name: Deploy & Previews
 
 on:
   push:
-    branches: [main]
-  workflow_dispatch:
+    branches: [main, dev]
+  pull_request:
+    types: [opened, reopened, synchronize, closed]
 
 permissions:
-  contents: read
-  pages: write
-  id-token: write
+  contents: write        # push the built site to the gh-pages branch
+  pull-requests: write   # post the preview link on the PR
 
-# Allow one concurrent deployment, cancel in-progress runs on new pushes.
+# Serialise writes to the gh-pages branch so concurrent runs never clobber
+# each other (production, dev, and PR previews all live on that one branch).
 concurrency:
-  group: pages
-  cancel-in-progress: true
+  group: gh-pages-deploy
+  cancel-in-progress: false
 
 jobs:
-  build:
+  deploy:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Setup Pages
-        uses: actions/configure-pages@v5
-        with:
-          enablement: true
-      - uses: actions/setup-node@v4
+
+      # Build (skipped when a PR is merely being closed — nothing to rebuild)
+      - if: github.event.action != 'closed'
+        uses: actions/setup-node@v4
         with:
           node-version: 22
           cache: npm
-      - run: npm ci
-      - run: npm run build
-      - uses: actions/upload-pages-artifact@v3
-        with:
-          path: dist
+      - if: github.event.action != 'closed'
+        run: npm ci
+      - if: github.event.action != 'closed'
+        run: npm run build
 
-  deploy:
-    needs: build
-    runs-on: ubuntu-latest
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
-    steps:
-      - id: deployment
-        uses: actions/deploy-pages@v4
+      # PR preview → /pr-preview/pr-<N>/  (auto-deploys, comments the link,
+      # and removes the folder again when the PR is closed/merged)
+      - name: PR preview
+        if: github.event_name == 'pull_request'
+        uses: rossjrw/pr-preview-action@v1
+        with:
+          source-dir: dist
+
+      # Production: push to main → site root
+      - name: Deploy production (main)
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        uses: peaceiris/actions-gh-pages@v4
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: ./dist
+          keep_files: true   # preserve /preview and /pr-preview folders
+
+      # Dev preview: push to dev → /preview/dev/
+      - name: Deploy dev preview (dev)
+        if: github.event_name == 'push' && github.ref == 'refs/heads/dev'
+        uses: peaceiris/actions-gh-pages@v4
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: ./dist
+          destination_dir: preview/dev
+          keep_files: true
