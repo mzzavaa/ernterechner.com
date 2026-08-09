@@ -105,10 +105,12 @@ function DotGridView({ plants, bedWidthCm, bedLengthCm, cursorWeek }: {
       const spacingPx = Math.max(6, e.spacingCm * scale);
       const rowSpacingPx = Math.max(6, e.rowSpacingCm * scale);
 
-      // Try natural spacing first
+      // Try natural spacing first. A row only counts if the plant's canopy
+      // still fits inside the bed - a row centred ON the bottom edge would
+      // render half outside the plot (and over the axis labels).
       const naturalDots: typeof result = [];
       let py = rowSpacingPx / 2;
-      while (py <= plotH && naturalDots.length < 800) {
+      while (py + rowSpacingPx * 0.25 <= plotH && naturalDots.length < 800) {
         let px = spacingPx / 2;
         while (px <= zoneW - spacingPx * 0.25 && naturalDots.length < 800) {
           const sz = Math.max(8, Math.min(36, spacingPx * 0.85, rowSpacingPx * 0.85));
@@ -594,8 +596,12 @@ function GrowthTimeline({ plants, cursorWeek, setCursorWeek }: {
         <div className="grid grid-cols-12">
           {cal.mo.map((mo, i) => (
             <div key={i} onClick={() => setCursorWeek(Math.round(i * 4.33))}
-              className={`font-mono text-[8px] tracking-tight sm:text-[11px] sm:tracking-normal text-center pb-0.75 cursor-pointer overflow-hidden border-b-2 ${i === cursorMonthIdx ? 'text-amber font-bold border-amber' : 'text-text-muted font-normal border-transparent'}`}
-            >{mo}</div>
+              className={`font-mono text-[10px] sm:text-[11px] text-center pb-0.75 cursor-pointer overflow-hidden border-b-2 ${i === cursorMonthIdx ? 'text-amber font-bold border-amber' : 'text-text-muted font-normal border-transparent'}`}
+            >
+              {/* phones: single-letter months - three-letter labels collide at 12 columns */}
+              <span className="sm:hidden">{mo[0]}</span>
+              <span className="hidden sm:inline">{mo}</span>
+            </div>
           ))}
         </div>
       </div>
