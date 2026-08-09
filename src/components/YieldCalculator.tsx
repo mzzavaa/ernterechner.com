@@ -11,12 +11,21 @@ import { useT, useLang, type Lang } from '../i18n';
 const WIKI_MAP = new Map(WIKI_PLANTS.map(p => [p.id, p]));
 const WIKI_MAP_EN = new Map(WIKI_PLANTS_EN.map(p => [p.id, p]));
 
+// English names for the few calculator-only crops the wiki doesn't cover.
+const EXTRA_NAME_EN: Record<string, string> = {
+  'kresse': 'Garden cress',
+  'mini-snack-gurke': 'Mini snack cucumber',
+  'pak-choi': 'Pak choi',
+  'mairuebchen': 'May turnip',
+  'fruehlingszwiebel': 'Spring onion',
+};
+
 type TFn = (de: string, en?: string) => string;
 
 // Localised display name for a plant: English wiki name when EN is active,
 // German (the yieldData name) otherwise. German output stays identical.
 const plantName = (plantId: string, deName: string, lang: Lang) =>
-  lang === 'en' ? (WIKI_MAP_EN.get(plantId)?.name ?? deName) : deName;
+  lang === 'en' ? (WIKI_MAP_EN.get(plantId)?.name ?? EXTRA_NAME_EN[plantId] ?? deName) : deName;
 
 // Hook variant for components.
 function usePlantName() {
