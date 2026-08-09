@@ -5,6 +5,7 @@ import { PlantIcon, getPlantDataUri, resolveIconKey, type Stage } from '../icons
 import { useFormat, type Format } from '../units';
 import { useT, useLang } from '../i18n';
 import { WIKI_PLANTS_EN } from '../data/en/plants';
+import { VARIETY_NAME_EN, VARIETY_DESC_EN } from '../data/en/varieties';
 
 const WIKI_MAP_EN = new Map(WIKI_PLANTS_EN.map(p => [p.id, p]));
 
@@ -13,6 +14,16 @@ function usePlantName() {
   const { lang } = useLang();
   return (e: { plantId: string; name: string }) =>
     lang === 'en' ? (WIKI_MAP_EN.get(e.plantId)?.name ?? e.name) : e.name;
+}
+
+// Localised variety name + description. Proper-noun cultivar names fall through
+// unchanged (they carry no VARIETY_NAME_EN entry); German descriptors translate.
+function useVariety() {
+  const { lang } = useLang();
+  return {
+    vname: (n?: string) => (lang === 'en' ? (n && VARIETY_NAME_EN[n]) || n || '' : n ?? ''),
+    vdesc: (d?: string) => (lang === 'en' ? (d && VARIETY_DESC_EN[d]) || d || '' : d ?? ''),
+  };
 }
 
 // "L × W" dimension label sharing one length unit (metric identical to raw cm).
@@ -210,6 +221,7 @@ function BedTopView({ plants, bedWidthCm, bedLengthCm, cursorWeek, onVarietyChan
   const fmt = useFormat();
   const t = useT();
   const pname = usePlantName();
+  const { vname, vdesc } = useVariety();
   const svgW = 560;
   const scale = svgW / bedLengthCm;
   const svgH = Math.max(100, bedWidthCm * scale);
@@ -351,7 +363,7 @@ function BedTopView({ plants, bedWidthCm, bedLengthCm, cursorWeek, onVarietyChan
             <div key={p.entry.plantId} className="flex items-center gap-1 flex-wrap">
               <span className="font-mono text-[11px] text-text-muted">{pname(p.entry)}:</span>
               {vis.varieties.map((v, vi) => (
-                <button key={vi} onClick={() => onVarietyChange(zoneIdx, vi)} title={v.description}
+                <button key={vi} onClick={() => onVarietyChange(zoneIdx, vi)} title={vdesc(v.description)}
                   className="w-3.5 h-3.5 rounded-full cursor-pointer p-0 shrink-0"
                   style={{
                     background: v.fruitColor,
@@ -361,7 +373,7 @@ function BedTopView({ plants, bedWidthCm, bedLengthCm, cursorWeek, onVarietyChan
                   }}
                 />
               ))}
-              <span className="font-mono text-[11px] text-text">{vis.varieties[p.selectedVarietyIdx]?.name}</span>
+              <span className="font-mono text-[11px] text-text">{vname(vis.varieties[p.selectedVarietyIdx]?.name)}</span>
             </div>
           );
         })}
@@ -658,6 +670,7 @@ function PlantInfoPanel({ entry, selectedVarietyIdx }: { entry: YieldEntry; sele
   const fmt = useFormat();
   const t = useT();
   const pname = usePlantName();
+  const { vname, vdesc } = useVariety();
   const vis = PLANT_VISUAL_MAP.get(entry.plantId);
   const variety = vis?.varieties[selectedVarietyIdx];
   return (
@@ -668,7 +681,7 @@ function PlantInfoPanel({ entry, selectedVarietyIdx }: { entry: YieldEntry; sele
         </div>
         <div>
           <h4 className="font-sans text-[1.125rem] font-extrabold text-text m-0">{pname(entry)}</h4>
-          {variety && <div className="font-mono text-[11px]" style={{ color: vis?.fruitColor ?? entry.color }}>{variety.name} · {variety.description}</div>}
+          {variety && <div className="font-mono text-[11px]" style={{ color: vis?.fruitColor ?? entry.color }}>{vname(variety.name)} · {vdesc(variety.description)}</div>}
         </div>
       </div>
       {vis && (
@@ -676,7 +689,7 @@ function PlantInfoPanel({ entry, selectedVarietyIdx }: { entry: YieldEntry; sele
           {vis.varieties.map((v, i) => (
             <div key={i} className="flex items-center gap-1.5 bg-bg px-2 py-1 rounded-md">
               <span className="w-2.5 h-2.5 rounded-full shrink-0 border border-[rgba(255,255,255,0.15)]" style={{ background: v.fruitColor }} />
-              <span className="font-sans text-[11px] text-text">{v.name}</span>
+              <span className="font-sans text-[11px] text-text">{vname(v.name)}</span>
             </div>
           ))}
         </div>
@@ -705,6 +718,7 @@ export default function BedVisualizer({ plants }: { plants: { entry: YieldEntry;
   const fmt = useFormat();
   const t = useT();
   const pname = usePlantName();
+  const { vname } = useVariety();
   // Bed dimensions stay internally in cm (SVG geometry); only the input display converts.
   const bedVal = (cm: number) => fmt.imperial ? Math.round(fmt.lenVal(cm) * 10) / 10 : cm;
   const [selectedPlantId, setSelectedPlantId] = useState<string | null>(null);
@@ -818,7 +832,7 @@ export default function BedVisualizer({ plants }: { plants: { entry: YieldEntry;
               {hasVarieties && (
                 <div className="flex gap-1 ml-1 pl-1.5 border-l border-[rgba(255,255,255,0.1)]">
                   {vis.varieties.map((v, vi) => (
-                    <button key={vi} onClick={() => handleVarietyChange(zoneIdx, vi)} title={v.name}
+                    <button key={vi} onClick={() => handleVarietyChange(zoneIdx, vi)} title={vname(v.name)}
                       className="w-3.5 h-3.5 rounded-full cursor-pointer p-0 shrink-0"
                       style={{
                         background: v.fruitColor,
