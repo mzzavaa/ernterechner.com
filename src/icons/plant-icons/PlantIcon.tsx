@@ -65,9 +65,11 @@ export const STAGE_LABELS: Record<Stage, string> = {
 };
 
 export const PLANT_ICON_KEY: Record<string, string> = {
-  bohne:    'buschbohne',
-  sellerie: 'knollensellerie',
-  fenchel:  'knollenfenchel',
+  bohne:             'buschbohne',
+  sellerie:          'knollensellerie',
+  fenchel:           'knollenfenchel',
+  'mini-snack-gurke': 'minigurke',
+  'pak-choi':         'pakchoi',
 };
 
 export function resolveIconKey(plantId: string): string {
