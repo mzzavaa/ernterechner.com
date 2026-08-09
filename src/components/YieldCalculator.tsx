@@ -7,31 +7,12 @@ import { PlantIcon, resolveIconKey } from '../icons/plant-icons/PlantIcon.tsx';
 import { useFormat, type Format } from '../units';
 import { wikiPlantUrl } from '../links';
 import { useT, useLang, type Lang } from '../i18n';
+import { plantName, usePlantName } from '../plantNames';
 
 const WIKI_MAP = new Map(WIKI_PLANTS.map(p => [p.id, p]));
 const WIKI_MAP_EN = new Map(WIKI_PLANTS_EN.map(p => [p.id, p]));
 
-// English names for the few calculator-only crops the wiki doesn't cover.
-const EXTRA_NAME_EN: Record<string, string> = {
-  'kresse': 'Garden cress',
-  'mini-snack-gurke': 'Mini snack cucumber',
-  'pak-choi': 'Pak choi',
-  'mairuebchen': 'May turnip',
-  'fruehlingszwiebel': 'Spring onion',
-};
-
 type TFn = (de: string, en?: string) => string;
-
-// Localised display name for a plant: English wiki name when EN is active,
-// German (the yieldData name) otherwise. German output stays identical.
-const plantName = (plantId: string, deName: string, lang: Lang) =>
-  lang === 'en' ? (WIKI_MAP_EN.get(plantId)?.name ?? EXTRA_NAME_EN[plantId] ?? deName) : deName;
-
-// Hook variant for components.
-function usePlantName() {
-  const { lang } = useLang();
-  return (e: { plantId: string; name: string }) => plantName(e.plantId, e.name, lang);
-}
 
 // ── DRY German→English lookups for data strings shown in the UI ──────────────
 // German (the raw data string) is always shown as-is; English only replaces it
@@ -911,10 +892,10 @@ function PlantPicker({ onAdd, exclude }: { onAdd: (e: YieldEntry) => void; exclu
       </div>
       <div className="flex flex-wrap gap-1.5">
         {filtered.map(e => (
-          <button key={e.plantId} onClick={() => onAdd(e)} className="plant-picker-item" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+          <button key={e.plantId} onClick={() => onAdd(e)} className="plant-picker-item flex items-center gap-1.5 text-left">
             <PlantIcon plant={resolveIconKey(e.plantId)} stage="reif" size={26} />
             <span className="font-sans text-xs text-text font-semibold">{pname(e)}</span>
-            <span className="font-mono text-xs text-text-muted ml-1">{fmt.densityRange(e.yieldKgPerM2Low, e.yieldKgPerM2High)}</span>
+            <span className="font-mono text-xs text-text-muted ml-1 whitespace-nowrap">{fmt.densityRange(e.yieldKgPerM2Low, e.yieldKgPerM2High)}</span>
           </button>
         ))}
         {filtered.length === 0 && <span className="font-sans text-xs text-text-muted">{t('Alle Pflanzen bereits ausgewählt', 'All plants already selected')}</span>}

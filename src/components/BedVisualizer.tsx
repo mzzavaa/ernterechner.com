@@ -4,17 +4,8 @@ import { PLANT_VISUAL_MAP, getPlantStage, lerpColor } from '../data/plantVisuals
 import { PlantIcon, getPlantDataUri, resolveIconKey, type Stage } from '../icons/plant-icons/PlantIcon.tsx';
 import { useFormat, type Format } from '../units';
 import { useT, useLang } from '../i18n';
-import { WIKI_PLANTS_EN } from '../data/en/plants';
 import { VARIETY_NAME_EN, VARIETY_DESC_EN } from '../data/en/varieties';
-
-const WIKI_MAP_EN = new Map(WIKI_PLANTS_EN.map(p => [p.id, p]));
-
-// Localised plant display name: English wiki name when EN is active, German otherwise.
-function usePlantName() {
-  const { lang } = useLang();
-  return (e: { plantId: string; name: string }) =>
-    lang === 'en' ? (WIKI_MAP_EN.get(e.plantId)?.name ?? e.name) : e.name;
-}
+import { usePlantName } from '../plantNames';
 
 // Localised variety name + description. Proper-noun cultivar names fall through
 // unchanged (they carry no VARIETY_NAME_EN entry); German descriptors translate.
@@ -534,17 +525,17 @@ function GrowthTimeline({ plants, cursorWeek, setCursorWeek }: {
       </div>
 
       <div className="mb-3">
-        <div className="flex items-center gap-3 mb-2">
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mb-2">
           <span className="font-mono text-[11px] text-text-muted uppercase whitespace-nowrap">{t('Woche', 'Week')}:</span>
           <input type="range" min={0} max={51} value={cursorWeek}
             onChange={e => setCursorWeek(+e.target.value)}
-            className="flex-1 accent-amber" />
-          <span className="font-display text-[1.125rem] font-bold text-amber" style={{ minWidth: 130 }}>
+            className="flex-1 min-w-[140px] accent-amber" />
+          <span className="font-display text-[1.125rem] font-bold text-amber whitespace-nowrap">
             {cal.kw} {cursorWeek + 1} · {cal.moLong[cursorMonthIdx]}
           </span>
         </div>
 
-        <div className="grid grid-cols-3 gap-2">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
           <div className="rounded-lg p-[8px_10px] bg-[rgba(93,143,46,0.07)] border border-[rgba(93,143,46,0.2)]">
             <div className="font-mono text-[11px] text-text-muted uppercase mb-1">{t('Erntereif', 'Ready to harvest')} · {cal.mo[cursorMonthIdx]}</div>
             {harvestableNow.length === 0
@@ -552,10 +543,10 @@ function GrowthTimeline({ plants, cursorWeek, setCursorWeek }: {
               : harvestableNow.map(p => {
                 const kgPerWeek = ((p.entry.yieldKgPerM2Low + p.entry.yieldKgPerM2High) / 2 / p.entry.harvestWindowWeeks * p.areaM2);
                 return (
-                  <div key={p.entry.plantId} className="flex items-center gap-1 mb-0.5">
+                  <div key={p.entry.plantId} className="flex flex-wrap items-center gap-1 mb-0.5">
                     <PlantIcon plant={resolveIconKey(p.entry.plantId)} stage="reif" size={16} />
                     <span className="font-sans text-[11px] text-text">{pname(p.entry)}</span>
-                    <span className="font-mono text-[11px] text-text-muted ml-auto">~{fmt.weightVal(kgPerWeek).toFixed(1)} {fmt.weightUnit}/{t('Wo', 'wk')}</span>
+                    <span className="font-mono text-[11px] text-text-muted ml-auto whitespace-nowrap">~{fmt.weightVal(kgPerWeek).toFixed(1)} {fmt.weightUnit}/{t('Wo', 'wk')}</span>
                   </div>
                 );
               })
@@ -802,11 +793,11 @@ export default function BedVisualizer({ plants }: { plants: { entry: YieldEntry;
             <span className="font-mono text-xs text-text-muted">{fmt.lenUnit}</span>
           </label>
         </div>
-        <div className="flex items-center gap-2 flex-1 min-w-50">
+        <div className="flex flex-wrap items-center gap-x-2 gap-y-1 flex-1 min-w-50">
           <span className="font-mono text-[11px] text-text-muted whitespace-nowrap">{cal.kw}:</span>
           <input type="range" min={0} max={51} value={cursorWeek} onChange={e => setCursorWeek(+e.target.value)}
-            className="flex-1 accent-amber" />
-          <span className="font-display text-base font-bold text-amber" style={{ minWidth: 130 }}>
+            className="flex-1 min-w-[140px] accent-amber" />
+          <span className="font-display text-base font-bold text-amber whitespace-nowrap">
             {cal.kw} {cursorWeek + 1} · {cal.moLong[Math.min(11, Math.floor(cursorWeek / 4.33))]}
           </span>
         </div>
