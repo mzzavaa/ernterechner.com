@@ -6,6 +6,8 @@ import { useFormat, type Format } from '../units';
 import { useT, useLang } from '../i18n';
 import { VARIETY_NAME_EN, VARIETY_DESC_EN } from '../data/en/varieties';
 import { usePlantName } from '../plantNames';
+import { computeBedPlan, type BedPlan } from '../bedLayout';
+import { companionVerdict } from '../companions';
 
 // Localised variety name + description. Proper-noun cultivar names fall through
 // unchanged (they carry no VARIETY_NAME_EN entry); German descriptors translate.
@@ -48,11 +50,10 @@ interface VisPlant {
   selectedVarietyIdx: number;
 }
 
-// ── Dot-grid scatter view ─────────────────────────────────────────────────
-function DotGridView({ plants, bedWidthCm, bedLengthCm, cursorWeek }: {
+// ── Plant-position view: the shared bed plan rendered with stage icons ────
+function DotGridView({ plan, plants, cursorWeek }: {
+  plan: BedPlan;
   plants: VisPlant[];
-  bedWidthCm: number;
-  bedLengthCm: number;
   cursorWeek: number;
 }) {
   const fmt = useFormat();
@@ -63,148 +64,96 @@ function DotGridView({ plants, bedWidthCm, bedLengthCm, cursorWeek }: {
   const PAD_B = 18;
   const SVG_W = 580;
   const plotW = SVG_W - PAD_L;
-  const scale = plotW / bedLengthCm;
-  const plotH = Math.min(bedWidthCm * scale, 250);
+  // Show the FULL plan even when it exceeds the bed - the overhang is drawn
+  // as a marked "doesn't fit" region instead of silently squeezing plants.
+  const displayLen = Math.max(plan.bedLengthCm, plan.requiredLengthCm);
+  const scale = Math.min(plotW / displayLen, 250 / plan.bedWidthCm);
+  const bedPx = plan.bedLengthCm * scale;
+  const usedPx = displayLen * scale;
+  const plotH = plan.bedWidthCm * scale;
   const svgH = plotH + PAD_B;
-  const totalArea = plants.reduce((s, p) => s + p.areaM2, 0);
-
   const cursorMonthFrac = cursorWeek / 4.33;
-
-  const { dots, dividerXs } = useMemo(() => {
-    const result: { cx: number; cy: number; color: string; plantId: string; iconStage: Stage; iconSize: number; plantFraction: number; phase: string }[] = [];
-    const divs: number[] = [];
-    let curZoneX = 0;
-
-    for (let i = 0; i < plants.length; i++) {
-      const plant = plants[i];
-      const e = plant.entry;
-      const vis = PLANT_VISUAL_MAP.get(e.plantId);
-      const stage = getPlantStage(e.sowIndoorMonth, e.sowOutdoorMonth, e.harvestStartMonth, e.harvestEndMonth, cursorMonthFrac);
-      const zoneW = totalArea > 0 ? (plant.areaM2 / totalArea) * plotW : plotW / plants.length;
-
-      const fruitRipe = vis?.varieties[plant.selectedVarietyIdx]?.fruitColor ?? vis?.fruitColor ?? e.color;
-      const leafColor = vis?.leafColor ?? '#5D8F2E';
-      const dotColor = stage.phase === 'dormant'
-        ? 'rgba(255,255,255,0.15)'
-        : stage.phase === 'harvest' ? fruitRipe : leafColor;
-
-      const iconStage: Stage = stage.phase === 'dormant' ? 'aussaat'
-        : stage.phase === 'indoor' ? 'keimling'
-        : stage.phase === 'growing' ? 'jungpflanze'
-        : 'reif'; // harvest + past both show reif (past fades via opacity)
-
-      const spacingPx = Math.max(6, e.spacingCm * scale);
-      const rowSpacingPx = Math.max(6, e.rowSpacingCm * scale);
-
-      // Try natural spacing first. A row only counts if the plant's canopy
-      // still fits inside the bed - a row centred ON the bottom edge would
-      // render half outside the plot (and over the axis labels). The resulting
-      // grid is centred in the zone so leftover space splits evenly on all
-      // sides instead of packing the plants into the top-left corner.
-      const rowYs: number[] = [];
-      for (let py = rowSpacingPx / 2; py + rowSpacingPx * 0.25 <= plotH && rowYs.length < 40; py += rowSpacingPx) rowYs.push(py);
-      if (!rowYs.length) rowYs.push(plotH / 2);
-      const colXs: number[] = [];
-      for (let px = spacingPx / 2; px <= zoneW - spacingPx * 0.25 && colXs.length < 40; px += spacingPx) colXs.push(px);
-      if (!colXs.length) colXs.push(zoneW / 2);
-      const dy = (plotH - rowYs[0] - rowYs[rowYs.length - 1]) / 2;
-      const dx = (zoneW - colXs[0] - colXs[colXs.length - 1]) / 2;
-
-      const naturalDots: typeof result = [];
-      const sz = Math.max(8, Math.min(52, spacingPx * 0.85, rowSpacingPx * 0.85));
-      outer: for (const py of rowYs) {
-        for (const px of colXs) {
-          if (naturalDots.length >= 800) break outer;
-          naturalDots.push({ cx: PAD_L + curZoneX + px + dx, cy: py + dy, color: dotColor, plantId: e.plantId, iconStage, iconSize: sz, plantFraction: stage.plantFraction, phase: stage.phase });
-        }
-      }
-
-      if (naturalDots.length >= plant.count) {
-        result.push(...naturalDots.slice(0, plant.count));
-      } else {
-        // Fallback: even grid to always show the configured count
-        const cols = Math.max(1, Math.round(Math.sqrt(plant.count * (zoneW / Math.max(1, plotH)))));
-        const rows = Math.ceil(plant.count / cols);
-        const cellW = zoneW / cols;
-        const cellH = plotH / rows;
-        const sz = Math.max(8, Math.min(52, cellW * 0.75, cellH * 0.75));
-        for (let r = 0; r < rows; r++) {
-          for (let c = 0; c < cols; c++) {
-            if (r * cols + c >= plant.count) break;
-            result.push({
-              cx: PAD_L + curZoneX + cellW * c + cellW / 2,
-              cy: cellH * r + cellH / 2,
-              color: dotColor, plantId: e.plantId, iconStage, iconSize: sz, plantFraction: stage.plantFraction, phase: stage.phase,
-            });
-          }
-        }
-      }
-
-      curZoneX += zoneW;
-      if (i < plants.length - 1) divs.push(PAD_L + curZoneX);
-    }
-
-    return { dots: result, dividerXs: divs };
-  }, [plants, cursorWeek, totalArea, plotW, scale, plotH]); // eslint-disable-line react-hooks/exhaustive-deps
-
-  const gridStepCm = bedLengthCm > 400 ? 100 : 50;
-  const gridStepCmY = bedWidthCm > 150 ? 50 : 25;
-
-  let curLabelX = 0;
-  const zoneLabels = plants.map(p => {
-    const zoneW = totalArea > 0 ? (p.areaM2 / totalArea) * plotW : plotW / plants.length;
-    const labelX = PAD_L + curLabelX + zoneW / 2;
-    curLabelX += zoneW;
-    return { x: labelX, name: pname(p.entry), color: PLANT_VISUAL_MAP.get(p.entry.plantId)?.fruitColor ?? p.entry.color };
-  });
+  const gridStepCm = displayLen > 400 ? 100 : 50;
+  const gridStepCmY = plan.bedWidthCm > 150 ? 50 : 25;
 
   return (
     <div>
       <div className="font-sans text-[13px] font-semibold text-amber mb-1.5">
-        {t('Pflanzenpositionen', 'Plant positions')} · {cal.kw} {cursorWeek + 1} · {cal.moLong[Math.min(11, Math.floor(cursorMonthFrac))]} ({dimPair(fmt, bedLengthCm, bedWidthCm)})
+        {t('Pflanzenpositionen', 'Plant positions')} · {cal.kw} {cursorWeek + 1} · {cal.moLong[Math.min(11, Math.floor(cursorMonthFrac))]} ({dimPair(fmt, plan.bedLengthCm, plan.bedWidthCm)})
       </div>
       <svg viewBox={`0 0 ${SVG_W} ${svgH}`} className="w-full rounded-[10px] border border-[rgba(255,255,255,0.08)] bg-bg" style={{ maxHeight: 320 }}>
-        {Array.from({ length: Math.floor(bedLengthCm / gridStepCm) + 1 }).map((_, i) => (
+        {Array.from({ length: Math.floor(displayLen / gridStepCm) + 1 }).map((_, i) => (
           <line key={`gx${i}`} x1={PAD_L + i * gridStepCm * scale} y1={0} x2={PAD_L + i * gridStepCm * scale} y2={plotH}
             stroke="rgba(255,255,255,0.05)" strokeWidth={0.5} />
         ))}
-        {Array.from({ length: Math.floor(bedWidthCm / gridStepCmY) + 1 }).map((_, i) => (
-          <line key={`gy${i}`} x1={PAD_L} y1={i * gridStepCmY * scale} x2={PAD_L + plotW} y2={i * gridStepCmY * scale}
+        {Array.from({ length: Math.floor(plan.bedWidthCm / gridStepCmY) + 1 }).map((_, i) => (
+          <line key={`gy${i}`} x1={PAD_L} y1={i * gridStepCmY * scale} x2={PAD_L + usedPx} y2={i * gridStepCmY * scale}
             stroke="rgba(255,255,255,0.05)" strokeWidth={0.5} />
         ))}
-        {dividerXs.map((x, i) => (
-          <line key={i} x1={x} y1={0} x2={x} y2={plotH}
+        {plan.zones.slice(1).map((z, i) => (
+          <line key={i} x1={PAD_L + z.startCm * scale} y1={0} x2={PAD_L + z.startCm * scale} y2={plotH}
             stroke="rgba(255,255,255,0.15)" strokeWidth={1} strokeDasharray="4,3" />
         ))}
-        <rect x={PAD_L} y={0} width={plotW} height={plotH} fill="none" stroke="rgba(255,255,255,0.12)" strokeWidth={1} />
-        {dots.map((d, i) => {
-          const uri = getPlantDataUri(d.plantId, d.iconStage);
-          // dormant: show tiny seed at 12% size; growing: scale by plantFraction
-          const scaledSize = Math.max(d.phase === 'dormant' ? 5 : 4, d.iconSize * Math.max(0.12, d.plantFraction));
-          const half = scaledSize / 2;
-          // bottom-anchor: soil level = cy + iconSize/2 (fixed); plant grows upward
-          const soilY = d.cy + d.iconSize / 2;
-          const opacity = d.phase === 'past' ? Math.max(0.15, d.plantFraction * 0.8)
-            : d.phase === 'dormant' ? 0.4
-            : d.plantFraction < 0.15 ? 0.35 : 0.92;
-          return uri ? (
-            <image key={i} href={uri} x={d.cx - half} y={soilY - scaledSize} width={scaledSize} height={scaledSize} opacity={opacity} />
-          ) : (
-            <circle key={i} cx={d.cx} cy={d.cy} r={Math.max(1.5, half * 0.6)} fill={d.color} opacity={opacity} />
+        <rect x={PAD_L} y={0} width={bedPx} height={plotH} fill="none" stroke="rgba(255,255,255,0.12)" strokeWidth={1} />
+        {!plan.fits && (
+          <g>
+            <rect x={PAD_L + bedPx} y={0} width={usedPx - bedPx} height={plotH} fill="var(--c-red)" opacity={0.07} />
+            <rect x={PAD_L + bedPx} y={0} width={usedPx - bedPx} height={plotH} fill="none" stroke="var(--c-red)" strokeWidth={1} strokeDasharray="5,3" opacity={0.6} />
+            <text x={PAD_L + (bedPx + usedPx) / 2} y={12} fontSize={8} fill="var(--c-red)" textAnchor="middle" fontFamily="monospace">
+              {t('passt nicht', "doesn't fit")}
+            </text>
+          </g>
+        )}
+        {plan.fits && plan.spareCm * scale > 40 && (
+          <text x={PAD_L + (plan.requiredLengthCm * scale + bedPx) / 2} y={plotH / 2} fontSize={8} fill="var(--c-sub)" textAnchor="middle" fontFamily="monospace" opacity={0.5}>
+            {svgLen(fmt, plan.spareCm)} {t('frei', 'free')}
+          </text>
+        )}
+        {plan.zones.map(zone => {
+          const e = zone.entry;
+          const vp = plants.find(p => p.entry.plantId === e.plantId);
+          const vis = PLANT_VISUAL_MAP.get(e.plantId);
+          const stage = getPlantStage(e.sowIndoorMonth, e.sowOutdoorMonth, e.harvestStartMonth, e.harvestEndMonth, cursorMonthFrac);
+          const fruitRipe = vis?.varieties[vp?.selectedVarietyIdx ?? 0]?.fruitColor ?? vis?.fruitColor ?? e.color;
+          const leafColor = vis?.leafColor ?? '#5D8F2E';
+          const dotColor = stage.phase === 'dormant' ? 'rgba(255,255,255,0.15)'
+            : stage.phase === 'harvest' ? fruitRipe : leafColor;
+          const iconStage: Stage = stage.phase === 'dormant' ? 'aussaat'
+            : stage.phase === 'indoor' ? 'keimling'
+            : stage.phase === 'growing' ? 'jungpflanze'
+            : 'reif'; // harvest + past both show reif (past fades via opacity)
+          const rowPitchCm = plan.bedWidthCm / zone.rows;
+          const sz = Math.max(8, Math.min(52, e.spacingCm * scale * 0.9, rowPitchCm * scale * 0.9));
+          const uri = getPlantDataUri(e.plantId, iconStage);
+          const scaled = Math.max(stage.phase === 'dormant' ? 5 : 4, sz * Math.max(0.12, stage.plantFraction));
+          const opacity = stage.phase === 'past' ? Math.max(0.15, stage.plantFraction * 0.8)
+            : stage.phase === 'dormant' ? 0.4
+            : stage.plantFraction < 0.15 ? 0.35 : 0.92;
+
+          return (
+            <g key={e.plantId}>
+              {zone.positions.map((pos, i) => {
+                const cx = PAD_L + pos.xCm * scale;
+                const soilY = pos.yCm * scale + sz / 2;
+                return uri ? (
+                  <image key={i} href={uri} x={cx - scaled / 2} y={soilY - scaled} width={scaled} height={scaled} opacity={opacity} />
+                ) : (
+                  <circle key={i} cx={cx} cy={pos.yCm * scale} r={Math.max(1.5, scaled * 0.3)} fill={dotColor} opacity={opacity} />
+                );
+              })}
+              <text x={PAD_L + (zone.startCm + zone.lengthCm / 2) * scale} y={plotH - 5}
+                fontSize={8} fill={vis?.fruitColor ?? e.color} textAnchor="middle" fontFamily="monospace" opacity={0.65} fontWeight="bold">{pname(e)}</text>
+            </g>
           );
         })}
-        {Array.from({ length: Math.floor(bedLengthCm / gridStepCm) + 1 }).map((_, i) => (
+        {Array.from({ length: Math.floor(displayLen / gridStepCm) + 1 }).map((_, i) => (
           <text key={i} x={PAD_L + i * gridStepCm * scale} y={plotH + 13}
             fontSize={7} fill="rgba(255,255,255,0.3)" textAnchor="middle" fontFamily="monospace">{i * gridStepCm}</text>
         ))}
-        <text x={PAD_L + plotW} y={plotH + 13} fontSize={6} fill="rgba(255,255,255,0.18)" textAnchor="end" fontFamily="monospace">cm</text>
-        {Array.from({ length: Math.floor(bedWidthCm / gridStepCmY) + 1 }).map((_, i) => (
+        <text x={PAD_L + usedPx} y={plotH + 13} fontSize={6} fill="rgba(255,255,255,0.18)" textAnchor="end" fontFamily="monospace">cm</text>
+        {Array.from({ length: Math.floor(plan.bedWidthCm / gridStepCmY) + 1 }).map((_, i) => (
           <text key={i} x={PAD_L - 4} y={i * gridStepCmY * scale + 3}
             fontSize={7} fill="rgba(255,255,255,0.3)" textAnchor="end" fontFamily="monospace">{i * gridStepCmY}</text>
-        ))}
-        {zoneLabels.map((z, i) => (
-          <text key={i} x={z.x} y={plotH - 5}
-            fontSize={8} fill={z.color} textAnchor="middle" fontFamily="monospace" opacity={0.65} fontWeight="bold">{z.name}</text>
         ))}
       </svg>
       <div className="flex flex-wrap gap-x-3 gap-y-1 mt-2">
@@ -224,11 +173,10 @@ function DotGridView({ plants, bedWidthCm, bedLengthCm, cursorWeek }: {
   );
 }
 
-// ── Top-down bed view: proportional zones, stage-aware rendering ──────────
-function BedTopView({ plants, bedWidthCm, bedLengthCm, cursorWeek, onVarietyChange }: {
+// ── Top-down bed view: the same plan drawn as true-scale canopies ─────────
+function BedTopView({ plan, plants, cursorWeek, onVarietyChange }: {
+  plan: BedPlan;
   plants: VisPlant[];
-  bedWidthCm: number;
-  bedLengthCm: number;
   cursorWeek: number;
   onVarietyChange: (plantIdx: number, varIdx: number) => void;
 }) {
@@ -238,47 +186,57 @@ function BedTopView({ plants, bedWidthCm, bedLengthCm, cursorWeek, onVarietyChan
   const cal = useCal();
   const { vname, vdesc } = useVariety();
   const svgW = 560;
-  const scale = svgW / bedLengthCm;
-  const svgH = Math.max(100, bedWidthCm * scale);
-  const totalArea = plants.reduce((s, p) => s + p.areaM2, 0);
-
-  const zones = useMemo(() => {
-    let curX = 0;
-    return plants.map(p => {
-      const zoneW = totalArea > 0 ? (p.areaM2 / totalArea) * svgW : svgW / plants.length;
-      const z = { x: curX, w: zoneW, plant: p };
-      curX += zoneW;
-      return z;
-    });
-  }, [plants, totalArea]);
+  const displayLen = Math.max(plan.bedLengthCm, plan.requiredLengthCm);
+  const scale = Math.min(svgW / displayLen, 260 / plan.bedWidthCm);
+  const bedPx = plan.bedLengthCm * scale;
+  const usedPx = displayLen * scale;
+  const svgH = Math.max(100, plan.bedWidthCm * scale);
 
   return (
     <div>
       <div className="font-sans text-[13px] font-semibold text-amber mb-1.5">
-        {t('Draufsicht', 'Top view')} · {cal.kw} {cursorWeek + 1} · {cal.moLong[Math.min(11, Math.floor(cursorWeek / 4.33))]} ({dimPair(fmt, bedLengthCm, bedWidthCm)})
+        {t('Draufsicht', 'Top view')} · {cal.kw} {cursorWeek + 1} · {cal.moLong[Math.min(11, Math.floor(cursorWeek / 4.33))]} ({dimPair(fmt, plan.bedLengthCm, plan.bedWidthCm)})
       </div>
       <svg viewBox={`0 0 ${svgW} ${svgH}`} className="w-full rounded-[10px] border border-[rgba(255,255,255,0.08)] bg-bg" style={{ maxHeight: 280 }}>
-        {Array.from({ length: Math.floor(bedLengthCm / 50) + 1 }).map((_, i) => (
+        {Array.from({ length: Math.floor(displayLen / 50) + 1 }).map((_, i) => (
           <line key={`gx${i}`} x1={i * 50 * scale} y1={0} x2={i * 50 * scale} y2={svgH} stroke="rgba(255,255,255,0.04)" strokeWidth={0.5} />
         ))}
-        {Array.from({ length: Math.floor(bedWidthCm / 50) + 1 }).map((_, i) => (
-          <line key={`gy${i}`} x1={0} y1={i * 50 * scale} x2={svgW} y2={i * 50 * scale} stroke="rgba(255,255,255,0.04)" strokeWidth={0.5} />
+        {Array.from({ length: Math.floor(plan.bedWidthCm / 50) + 1 }).map((_, i) => (
+          <line key={`gy${i}`} x1={0} y1={i * 50 * scale} x2={usedPx} y2={i * 50 * scale} stroke="rgba(255,255,255,0.04)" strokeWidth={0.5} />
         ))}
+        {!plan.fits && (
+          <g>
+            <rect x={bedPx} y={0} width={usedPx - bedPx} height={svgH} fill="var(--c-red)" opacity={0.07} />
+            <rect x={bedPx} y={0} width={usedPx - bedPx} height={svgH} fill="none" stroke="var(--c-red)" strokeWidth={1} strokeDasharray="5,3" opacity={0.6} />
+            <text x={(bedPx + usedPx) / 2} y={14} fontSize={8} fill="var(--c-red)" textAnchor="middle" fontFamily="monospace">
+              {t('passt nicht', "doesn't fit")}
+            </text>
+          </g>
+        )}
+        {plan.fits && plan.spareCm * scale > 40 && (
+          <text x={(plan.requiredLengthCm * scale + bedPx) / 2} y={svgH / 2} fontSize={8} fill="var(--c-sub)" textAnchor="middle" fontFamily="monospace" opacity={0.5}>
+            {svgLen(fmt, plan.spareCm)} {t('frei', 'free')}
+          </text>
+        )}
+        <rect x={0} y={0} width={bedPx} height={svgH} fill="none" stroke="rgba(255,255,255,0.12)" strokeWidth={1} />
 
-        {zones.map(({ x, w, plant }) => {
-          const e = plant.entry;
+        {plan.zones.map((zone, zoneIdx) => {
+          const e = zone.entry;
+          const vp = plants[zoneIdx];
           const vis = PLANT_VISUAL_MAP.get(e.plantId);
           const stage = getPlantStage(e.sowIndoorMonth, e.sowOutdoorMonth, e.harvestStartMonth, e.harvestEndMonth, cursorWeek / 4.33);
+          const zx = zone.startCm * scale;
+          const zw = zone.lengthCm * scale;
 
           if (stage.phase === 'dormant') {
             return (
               <g key={e.plantId}>
-                <rect x={x} y={0} width={w} height={svgH} fill={e.color} opacity={0.02} />
-                <line x1={x} y1={0} x2={x} y2={svgH} stroke={e.color} strokeWidth={0.5} opacity={0.15} />
-                <text x={x + w / 2} y={svgH / 2} fontSize={9} fill={e.color} textAnchor="middle" fontFamily="monospace" opacity={0.4}>
+                <rect x={zx} y={0} width={zw} height={svgH} fill={e.color} opacity={0.02} />
+                <line x1={zx} y1={0} x2={zx} y2={svgH} stroke={e.color} strokeWidth={0.5} opacity={0.15} />
+                <text x={zx + zw / 2} y={svgH / 2} fontSize={9} fill={e.color} textAnchor="middle" fontFamily="monospace" opacity={0.4}>
                   {pname(e)}
                 </text>
-                <text x={x + w / 2} y={svgH / 2 + 12} fontSize={7} fill="var(--c-sub)" textAnchor="middle" fontFamily="monospace" opacity={0.4}>
+                <text x={zx + zw / 2} y={svgH / 2 + 12} fontSize={7} fill="var(--c-sub)" textAnchor="middle" fontFamily="monospace" opacity={0.4}>
                   {t('noch nicht ausgesät', 'not sown yet')}
                 </text>
               </g>
@@ -287,34 +245,17 @@ function BedTopView({ plants, bedWidthCm, bedLengthCm, cursorWeek, onVarietyChan
 
           const leafColor = vis?.leafColor ?? '#3a7a2a';
           const leafColorDark = vis?.leafColorDark ?? '#1a5a1a';
-          const fruitRipe = vis?.varieties[plant.selectedVarietyIdx]?.fruitColor ?? vis?.fruitColor ?? e.color;
+          const fruitRipe = vis?.varieties[vp?.selectedVarietyIdx ?? 0]?.fruitColor ?? vis?.fruitColor ?? e.color;
           const fruitUnripe = vis?.fruitUnripeColor ?? '#3a7a2a';
           const currentFruitColor = lerpColor(fruitUnripe, fruitRipe, stage.ripenessFraction);
 
-          const plantSpacing = e.spacingCm * scale;
-          const rowSpacing = e.rowSpacingCm * scale;
-          const baseRadius = Math.max(4, Math.min((e.spreadCm / 2) * scale * 0.9, plantSpacing * 0.48, rowSpacing * 0.48));
+          // True-to-scale full-grown canopy, lightly capped so neighbouring
+          // plants overlap at most a little (as they do in a real bed).
+          const rowPitchCm = plan.bedWidthCm / zone.rows;
+          const baseRadius = Math.max(4, Math.min(e.spreadCm / 2, e.spacingCm * 0.55, rowPitchCm * 0.55) * scale);
           const radius = baseRadius * stage.plantFraction;
-
           const fruitSizePx = vis ? Math.max(2, (vis.fruitSizeCm / e.spreadCm) * baseRadius * 2) : 4;
           const fruitR = Math.max(1.5, fruitSizePx * 0.5 * stage.plantFraction);
-
-          // Row/column layout uses the full-grown canopy (baseRadius) so plant
-          // positions stay put across the season, and the grid is centred in
-          // the zone instead of hugging the top-left corner.
-          const rowYs: number[] = [];
-          for (let py = rowSpacing / 2; py + baseRadius <= svgH && rowYs.length < 20; py += rowSpacing) rowYs.push(py);
-          if (!rowYs.length) rowYs.push(svgH / 2);
-          const colXs: number[] = [];
-          for (let px = plantSpacing / 2; px + baseRadius <= w && colXs.length < 20; px += plantSpacing) colXs.push(px);
-          if (!colXs.length) colXs.push(w / 2);
-          const dy = (svgH - rowYs[0] - rowYs[rowYs.length - 1]) / 2;
-          const dx = (w - colXs[0] - colXs[colXs.length - 1]) / 2;
-
-          const positions: { px: number; py: number }[] = [];
-          for (const py of rowYs) for (const px of colXs) {
-            if (positions.length < 200) positions.push({ px: x + px + dx, py: py + dy });
-          }
 
           const showFruits = stage.fruitFraction > 0 && !vis?.isLeafCrop && !vis?.fruitBelowGround;
           const showRootTip = stage.fruitFraction > 0 && vis?.fruitBelowGround;
@@ -325,27 +266,29 @@ function BedTopView({ plants, bedWidthCm, bedLengthCm, cursorWeek, onVarietyChan
 
           return (
             <g key={e.plantId}>
-              <rect x={x} y={0} width={w} height={svgH} fill={displayLeafColor} opacity={0.03} />
-              <line x1={x} y1={0} x2={x} y2={svgH} stroke={displayLeafColor} strokeWidth={0.5} opacity={0.2} />
+              <rect x={zx} y={0} width={zw} height={svgH} fill={displayLeafColor} opacity={0.03} />
+              <line x1={zx} y1={0} x2={zx} y2={svgH} stroke={displayLeafColor} strokeWidth={0.5} opacity={0.2} />
 
-              {positions.map((pos, i) => {
+              {zone.positions.map((pos, i) => {
                 if (radius < 1) return null;
+                const px = pos.xCm * scale;
+                const py = pos.yCm * scale;
                 const fruitSeeds: { fx: number; fy: number }[] = [];
                 if (showFruits && stage.fruitFraction > 0) {
                   const fruitCount = Math.max(1, Math.round((vis?.fruitCount ?? 4) * stage.fruitFraction));
                   const fr = radius * 0.55;
                   for (let fi = 0; fi < fruitCount && fi < 12; fi++) {
                     const angle = (fi / fruitCount) * Math.PI * 2;
-                    fruitSeeds.push({ fx: pos.px + Math.cos(angle) * fr, fy: pos.py + Math.sin(angle) * fr });
+                    fruitSeeds.push({ fx: px + Math.cos(angle) * fr, fy: py + Math.sin(angle) * fr });
                   }
                 }
 
                 return (
                   <g key={i}>
-                    <circle cx={pos.px + 1} cy={pos.py + 1} r={radius} fill={leafColorDark} opacity={0.3} />
-                    <circle cx={pos.px} cy={pos.py} r={radius} fill={displayLeafColor} opacity={0.75} />
-                    <circle cx={pos.px - radius * 0.2} cy={pos.py - radius * 0.2} r={radius * 0.35} fill={displayLeafColor} opacity={0.5} />
-                    <circle cx={pos.px} cy={pos.py} r={Math.max(1.5, radius * 0.12)} fill={leafColorDark} opacity={0.8} />
+                    <circle cx={px + 1} cy={py + 1} r={radius} fill={leafColorDark} opacity={0.3} />
+                    <circle cx={px} cy={py} r={radius} fill={displayLeafColor} opacity={0.75} />
+                    <circle cx={px - radius * 0.2} cy={py - radius * 0.2} r={radius * 0.35} fill={displayLeafColor} opacity={0.5} />
+                    <circle cx={px} cy={py} r={Math.max(1.5, radius * 0.12)} fill={leafColorDark} opacity={0.8} />
                     {fruitSeeds.map((f, fi) => (
                       <g key={fi}>
                         <circle cx={f.fx + 0.5} cy={f.fy + 0.5} r={fruitR} fill={currentFruitColor} opacity={0.3} />
@@ -353,22 +296,22 @@ function BedTopView({ plants, bedWidthCm, bedLengthCm, cursorWeek, onVarietyChan
                       </g>
                     ))}
                     {showRootTip && (
-                      <ellipse cx={pos.px} cy={pos.py + radius * 0.6} rx={fruitR} ry={fruitR * 2} fill={currentFruitColor} opacity={0.7} />
+                      <ellipse cx={px} cy={py + radius * 0.6} rx={fruitR} ry={fruitR * 2} fill={currentFruitColor} opacity={0.7} />
                     )}
                   </g>
                 );
               })}
 
-              <rect x={x + 2} y={svgH - 18} width={w - 4} height={16} fill="var(--c-bg)" opacity={0.7} rx={3} />
-              <text x={x + w / 2} y={svgH - 7} fontSize={9} fill={vis?.fruitColor ?? e.color} textAnchor="middle" fontFamily="monospace" fontWeight="bold">
+              <rect x={zx + 2} y={svgH - 18} width={Math.max(zw - 4, 30)} height={16} fill="var(--c-bg)" opacity={0.7} rx={3} />
+              <text x={zx + zw / 2} y={svgH - 7} fontSize={9} fill={vis?.fruitColor ?? e.color} textAnchor="middle" fontFamily="monospace" fontWeight="bold">
                 {pname(e)} {stage.phase === 'indoor' ? t('(Vorkultur)', '(indoor start)') : ''}
               </text>
             </g>
           );
         })}
 
-        <rect x={svgW - 6 - 50 * scale} y={10} width={50 * scale} height={2} fill="var(--c-text)" opacity={0.35} />
-        <text x={svgW - 6 - 25 * scale} y={9} fontSize={8} fill="var(--c-sub)" textAnchor="middle" fontFamily="monospace">{svgLen(fmt, 50)}</text>
+        <rect x={usedPx - 6 - 50 * scale} y={10} width={50 * scale} height={2} fill="var(--c-text)" opacity={0.35} />
+        <text x={usedPx - 6 - 25 * scale} y={9} fontSize={8} fill="var(--c-sub)" textAnchor="middle" fontFamily="monospace">{svgLen(fmt, 50)}</text>
       </svg>
 
       <div className="flex flex-wrap gap-1.5 mt-2">
@@ -743,6 +686,84 @@ function PlantInfoPanel({ entry, selectedVarietyIdx }: { entry: YieldEntry; sele
 }
 
 // ── Main ──────────────────────────────────────────────────────────────────
+// ── Fit summary: does the calculated planting actually fit this bed? ──────
+function FitSummary({ plan }: { plan: BedPlan }) {
+  const fmt = useFormat();
+  const t = useT();
+  const pname = usePlantName();
+  if (!plan.zones.length) return null;
+  return (
+    <div className={`rounded-lg p-[8px_10px] mb-2 border ${plan.fits
+      ? 'bg-[rgba(93,143,46,0.07)] border-[rgba(93,143,46,0.2)]'
+      : 'bg-[rgba(220,80,60,0.08)] border-[rgba(220,80,60,0.35)]'}`}>
+      <div className={`font-sans text-xs font-semibold mb-1 ${plan.fits ? 'text-primary' : 'text-red'}`}>
+        {plan.fits
+          ? `${t('Plan passt', 'Plan fits')} · ${t('braucht', 'needs')} ${fmt.len(plan.requiredLengthCm)} ${t('von', 'of')} ${fmt.len(plan.bedLengthCm)} ${t('Beetlänge', 'bed length')}${plan.spareCm >= 10 ? ` · ${fmt.len(plan.spareCm)} ${t('frei', 'spare')}` : ''}`
+          : `${t('Beet zu klein', 'Bed too small')} · ${t('braucht', 'needs')} ${fmt.len(plan.requiredLengthCm)} × ${fmt.len(plan.bedWidthCm)} · ${fmt.len(plan.overflowCm)} ${t('Länge fehlt', 'length missing')}`}
+      </div>
+      <div className="flex flex-wrap gap-x-3 gap-y-0.5">
+        {plan.zones.map(z => (
+          <span key={z.entry.plantId} className="font-mono text-[11px] text-text-muted">
+            {z.count}× {pname(z.entry)} · {z.rows}×{z.cols} @ {fmt.len(z.entry.spacingCm)}×{fmt.len(z.entry.rowSpacingCm)} = {fmt.len(z.lengthCm)}
+          </span>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// ── Companion planting: judge bed neighbours via the wiki's partner data ──
+function CompanionPanel({ plan }: { plan: BedPlan }) {
+  const t = useT();
+  const pname = usePlantName();
+  const { lang } = useLang();
+  if (plan.zones.length < 2) return null;
+
+  const pairs: { a: (typeof plan.zones)[0]; b: (typeof plan.zones)[0]; adjacent: boolean; status: string; note?: string }[] = [];
+  for (let i = 0; i < plan.zones.length; i++) {
+    for (let j = i + 1; j < plan.zones.length; j++) {
+      const v = companionVerdict(plan.zones[i].entry.plantId, plan.zones[j].entry.plantId);
+      const adjacent = j === i + 1;
+      // Adjacent pairs always shown; distant pairs only when they warn.
+      if (adjacent || v.status === 'bad') {
+        pairs.push({ a: plan.zones[i], b: plan.zones[j], adjacent, status: v.status, note: v.note });
+      }
+    }
+  }
+  if (!pairs.length) return null;
+
+  const dot = (status: string) =>
+    status === 'good' ? 'var(--c-green)' : status === 'bad' ? 'var(--c-red)' : 'var(--c-sub)';
+  const label = (status: string) =>
+    status === 'good' ? t('gute Nachbarn', 'good neighbours')
+    : status === 'bad' ? t('schlechte Nachbarn', 'bad neighbours')
+    : status === 'neutral' ? t('neutral', 'neutral') : t('keine Daten', 'no data');
+
+  return (
+    <div className="rounded-lg p-[8px_10px] mb-3 bg-[rgba(255,255,255,0.02)] border border-[rgba(255,255,255,0.07)]">
+      <div className="font-mono text-[11px] text-text-muted uppercase mb-1">{t('Mischkultur (aus dem Wiki)', 'Companion planting (from the wiki)')}</div>
+      <div className="flex flex-col gap-0.5">
+        {pairs.map((pr, i) => (
+          <div key={i} className="flex flex-wrap items-baseline gap-x-1.5">
+            <span className="w-2 h-2 rounded-full shrink-0 self-center" style={{ background: dot(pr.status) }} />
+            <span className="font-sans text-[11px] text-text">
+              {pname(pr.a.entry)} + {pname(pr.b.entry)}
+            </span>
+            <span className={`font-sans text-[11px] ${pr.status === 'bad' ? 'text-red' : 'text-text-muted'}`}>
+              {label(pr.status)}{!pr.adjacent ? ` · ${t('im selben Beet', 'in the same bed')}` : ''}
+            </span>
+            {pr.status === 'bad' && pr.note && (
+              <span className="font-sans text-[11px] text-text-muted">
+                {lang === 'en' ? 'wiki (German): ' : 'Wiki: '}„{pr.note}“
+              </span>
+            )}
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 export default function BedVisualizer({ plants }: { plants: { entry: YieldEntry; areaM2: number }[] }) {
   const fmt = useFormat();
   const t = useT();
@@ -777,6 +798,8 @@ export default function BedVisualizer({ plants }: { plants: { entry: YieldEntry;
   const handleVarietyChange = (plantIdx: number, varIdx: number) => {
     setVisPlants(prev => prev.map((p, i) => i === plantIdx ? { ...p, selectedVarietyIdx: varIdx } : p));
   };
+
+  const plan = useMemo(() => computeBedPlan(visPlants, bedWidth, bedLength), [visPlants, bedWidth, bedLength]);
 
   if (visPlants.length === 0) {
     return (
@@ -820,6 +843,9 @@ export default function BedVisualizer({ plants }: { plants: { entry: YieldEntry;
         </div>
       </div>
 
+      <FitSummary plan={plan} />
+      <CompanionPanel plan={plan} />
+
       <div className="flex gap-1 mb-3">
         {([['dots', t('Pflanzen', 'Plants')], ['zones', t('Beetskizze', 'Bed sketch')]] as const).map(([tab, label]) => (
           <button key={tab} onClick={() => setViewTab(tab)}
@@ -831,8 +857,8 @@ export default function BedVisualizer({ plants }: { plants: { entry: YieldEntry;
 
       <div className="mb-4">
         {viewTab === 'dots'
-          ? <DotGridView plants={visPlants} bedWidthCm={bedWidth} bedLengthCm={bedLength} cursorWeek={cursorWeek} />
-          : <BedTopView plants={visPlants} bedWidthCm={bedWidth} bedLengthCm={bedLength} cursorWeek={cursorWeek} onVarietyChange={handleVarietyChange} />
+          ? <DotGridView plan={plan} plants={visPlants} cursorWeek={cursorWeek} />
+          : <BedTopView plan={plan} plants={visPlants} cursorWeek={cursorWeek} onVarietyChange={handleVarietyChange} />
         }
       </div>
 
