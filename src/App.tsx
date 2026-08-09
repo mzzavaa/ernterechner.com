@@ -1,4 +1,5 @@
 import YieldCalculator from './components/YieldCalculator';
+import { UnitToggle } from './units';
 import './index.css';
 
 export default function App() {
@@ -24,6 +25,7 @@ export default function App() {
           <span className="font-mono" style={{ fontSize: '0.7rem', color: 'var(--c-sub)', marginLeft: 'auto', letterSpacing: '0.04em' }}>
             Gemüsegarten · Ertrag &amp; Beetplanung
           </span>
+          <UnitToggle />
         </div>
       </header>
 

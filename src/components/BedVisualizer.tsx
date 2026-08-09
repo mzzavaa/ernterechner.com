@@ -2,6 +2,16 @@ import { useState, useEffect, useMemo } from 'react';
 import { type YieldEntry } from '../data/yieldData';
 import { PLANT_VISUAL_MAP, getPlantStage, lerpColor } from '../data/plantVisuals';
 import { PlantIcon, getPlantDataUri, resolveIconKey, type Stage } from '../icons/plant-icons/PlantIcon.tsx';
+import { useFormat, type Format } from '../units';
+
+// "L × W" dimension label sharing one length unit (metric identical to raw cm).
+const dimPair = (fmt: Format, lCm: number, wCm: number) =>
+  fmt.imperial
+    ? `${fmt.lenVal(lCm).toFixed(1)} × ${fmt.lenVal(wCm).toFixed(1)} in`
+    : `${lCm} × ${wCm} cm`;
+// SVG-style length annotation with no space (metric identical to `${x}cm`).
+const svgLen = (fmt: Format, cm: number) =>
+  fmt.imperial ? `${fmt.lenVal(cm).toFixed(1)}in` : `${Math.round(cm)}cm`;
 
 const MONTHS = ['Jan', 'Feb', 'Mär', 'Apr', 'Mai', 'Jun', 'Jul', 'Aug', 'Sep', 'Okt', 'Nov', 'Dez'];
 const MONTHS_LONG = ['Januar', 'Februar', 'März', 'April', 'Mai', 'Juni', 'Juli', 'August', 'September', 'Oktober', 'November', 'Dezember'];
@@ -20,6 +30,7 @@ function DotGridView({ plants, bedWidthCm, bedLengthCm, cursorWeek }: {
   bedLengthCm: number;
   cursorWeek: number;
 }) {
+  const fmt = useFormat();
   const PAD_L = 30;
   const PAD_B = 18;
   const SVG_W = 580;
@@ -112,7 +123,7 @@ function DotGridView({ plants, bedWidthCm, bedLengthCm, cursorWeek }: {
   return (
     <div>
       <div className="font-sans text-[13px] font-semibold text-amber mb-1.5">
-        Pflanzenpositionen · KW {cursorWeek + 1} · {MONTHS_LONG[Math.min(11, Math.floor(cursorMonthFrac))]} ({bedLengthCm} × {bedWidthCm} cm)
+        Pflanzenpositionen · KW {cursorWeek + 1} · {MONTHS_LONG[Math.min(11, Math.floor(cursorMonthFrac))]} ({dimPair(fmt, bedLengthCm, bedWidthCm)})
       </div>
       <svg viewBox={`0 0 ${SVG_W} ${svgH}`} className="w-full rounded-[10px] border border-[rgba(255,255,255,0.08)] bg-bg" style={{ maxHeight: 320 }}>
         {Array.from({ length: Math.floor(bedLengthCm / gridStepCm) + 1 }).map((_, i) => (
@@ -183,6 +194,7 @@ function BedTopView({ plants, bedWidthCm, bedLengthCm, cursorWeek, onVarietyChan
   cursorWeek: number;
   onVarietyChange: (plantIdx: number, varIdx: number) => void;
 }) {
+  const fmt = useFormat();
   const svgW = 560;
   const scale = svgW / bedLengthCm;
   const svgH = Math.max(100, bedWidthCm * scale);
@@ -201,7 +213,7 @@ function BedTopView({ plants, bedWidthCm, bedLengthCm, cursorWeek, onVarietyChan
   return (
     <div>
       <div className="font-sans text-[13px] font-semibold text-amber mb-1.5">
-        Draufsicht · KW {cursorWeek + 1} · {MONTHS_LONG[Math.min(11, Math.floor(cursorWeek / 4.33))]} ({bedLengthCm} × {bedWidthCm} cm)
+        Draufsicht · KW {cursorWeek + 1} · {MONTHS_LONG[Math.min(11, Math.floor(cursorWeek / 4.33))]} ({dimPair(fmt, bedLengthCm, bedWidthCm)})
       </div>
       <svg viewBox={`0 0 ${svgW} ${svgH}`} className="w-full rounded-[10px] border border-[rgba(255,255,255,0.08)] bg-bg" style={{ maxHeight: 280 }}>
         {Array.from({ length: Math.floor(bedLengthCm / 50) + 1 }).map((_, i) => (
@@ -308,7 +320,7 @@ function BedTopView({ plants, bedWidthCm, bedLengthCm, cursorWeek, onVarietyChan
         })}
 
         <rect x={svgW - 6 - 50 * scale} y={10} width={50 * scale} height={2} fill="var(--c-text)" opacity={0.35} />
-        <text x={svgW - 6 - 25 * scale} y={9} fontSize={8} fill="var(--c-sub)" textAnchor="middle" fontFamily="monospace">50cm</text>
+        <text x={svgW - 6 - 25 * scale} y={9} fontSize={8} fill="var(--c-sub)" textAnchor="middle" fontFamily="monospace">{svgLen(fmt, 50)}</text>
       </svg>
 
       <div className="flex flex-wrap gap-1.5 mt-2">
@@ -359,6 +371,7 @@ function BedTopView({ plants, bedWidthCm, bedLengthCm, cursorWeek, onVarietyChan
 
 // ── Side view ─────────────────────────────────────────────────────────────
 function SideView({ plants, cursorWeek }: { plants: VisPlant[]; cursorWeek: number }) {
+  const fmt = useFormat();
   const maxH = Math.max(...plants.map(p => p.entry.heightCm), 50);
   const svgW = 400;
   const svgH = 200;
@@ -377,7 +390,7 @@ function SideView({ plants, cursorWeek }: { plants: VisPlant[]; cursorWeek: numb
         {[50, 100, 150, 200].filter(h => h <= maxH).map(h => (
           <g key={h}>
             <line x1={0} y1={svgH - 20 - h * hScale} x2={svgW} y2={svgH - 20 - h * hScale} stroke="rgba(255,255,255,0.06)" strokeWidth={0.5} strokeDasharray="4,4" />
-            <text x={4} y={svgH - 22 - h * hScale} fontSize={7} fill="var(--c-sub)" fontFamily="monospace">{h}cm</text>
+            <text x={4} y={svgH - 22 - h * hScale} fontSize={7} fill="var(--c-sub)" fontFamily="monospace">{svgLen(fmt, h)}</text>
           </g>
         ))}
         {plants.map((p, i) => {
@@ -441,7 +454,7 @@ function SideView({ plants, cursorWeek }: { plants: VisPlant[]; cursorWeek: numb
                 <ellipse cx={x} cy={baseY - h / 2} rx={Math.min(barW * 0.4, h * 0.3)} ry={h / 2} fill={leafColor} opacity={isPast ? 0.25 : 0.45} stroke={leafColor} strokeWidth={1} />
               )}
               <text x={x} y={baseY + 14} fontSize={7} fill={isPast ? 'var(--c-sub)' : 'var(--c-text)'} textAnchor="middle" fontFamily="monospace" opacity={isPast ? 0.5 : 1}>{e.name}</text>
-              {!isPast && <text x={x} y={baseY - imgH - 3} fontSize={7} fill={leafColor} textAnchor="middle" fontFamily="monospace">{Math.round(e.heightCm * stage.plantFraction)}cm</text>}
+              {!isPast && <text x={x} y={baseY - imgH - 3} fontSize={7} fill={leafColor} textAnchor="middle" fontFamily="monospace">{svgLen(fmt, e.heightCm * stage.plantFraction)}</text>}
               {isPast && stage.plantFraction > 0.1 && <text x={x} y={baseY - imgH - 3} fontSize={6} fill="var(--c-sub)" textAnchor="middle" fontFamily="monospace" opacity={0.5}>verblüht</text>}
             </g>
           );
@@ -457,6 +470,7 @@ function GrowthTimeline({ plants, cursorWeek, setCursorWeek }: {
   cursorWeek: number;
   setCursorWeek: (w: number) => void;
 }) {
+  const fmt = useFormat();
   const mFrac = cursorWeek / 4.33;
   const m = mFrac + 1;
   const cursorMonthIdx = Math.min(11, Math.floor(mFrac));
@@ -493,7 +507,7 @@ function GrowthTimeline({ plants, cursorWeek, setCursorWeek }: {
                   <div key={p.entry.plantId} className="flex items-center gap-1 mb-0.5">
                     <PlantIcon plant={resolveIconKey(p.entry.plantId)} stage="reif" size={16} />
                     <span className="font-sans text-[11px] text-text">{p.entry.name}</span>
-                    <span className="font-mono text-[11px] text-text-muted ml-auto">~{kgPerWeek.toFixed(1)} kg/Wo</span>
+                    <span className="font-mono text-[11px] text-text-muted ml-auto">~{fmt.weightVal(kgPerWeek).toFixed(1)} {fmt.weightUnit}/Wo</span>
                   </div>
                 );
               })
@@ -622,6 +636,7 @@ function GrowthTimeline({ plants, cursorWeek, setCursorWeek }: {
 
 // ── Plant info panel ──────────────────────────────────────────────────────
 function PlantInfoPanel({ entry, selectedVarietyIdx }: { entry: YieldEntry; selectedVarietyIdx: number }) {
+  const fmt = useFormat();
   const vis = PLANT_VISUAL_MAP.get(entry.plantId);
   const variety = vis?.varieties[selectedVarietyIdx];
   return (
@@ -647,10 +662,10 @@ function PlantInfoPanel({ entry, selectedVarietyIdx }: { entry: YieldEntry; sele
       )}
       <div className="grid grid-cols-3 gap-1.5">
         {[
-          { l: 'Höhe', v: `${entry.heightCm} cm`, c: 'var(--c-text)' },
-          { l: 'Abstand', v: `${entry.spacingCm} cm`, c: 'var(--c-cyan)' },
+          { l: 'Höhe', v: fmt.len(entry.heightCm), c: 'var(--c-text)' },
+          { l: 'Abstand', v: fmt.len(entry.spacingCm), c: 'var(--c-cyan)' },
           { l: 'Pfl/m²', v: `${entry.plantsPerM2}`, c: 'var(--c-green)' },
-          { l: 'Ertrag', v: `${entry.yieldKgPerM2Low}–${entry.yieldKgPerM2High} kg/m²`, c: 'var(--c-amber)' },
+          { l: 'Ertrag', v: fmt.densityRange(entry.yieldKgPerM2Low, entry.yieldKgPerM2High), c: 'var(--c-amber)' },
           { l: 'Ernte', v: `${entry.weeksToHarvest} Wo.`, c: 'var(--c-red)' },
           { l: 'Lagerung', v: entry.storageMonths > 0 ? `${entry.storageMonths} Mon.` : 'Nur frisch', c: entry.storageMonths > 0 ? 'var(--c-green)' : 'var(--c-sub)' },
         ].map((d, i) => (
@@ -666,6 +681,9 @@ function PlantInfoPanel({ entry, selectedVarietyIdx }: { entry: YieldEntry; sele
 
 // ── Main ──────────────────────────────────────────────────────────────────
 export default function BedVisualizer({ plants }: { plants: { entry: YieldEntry; areaM2: number }[] }) {
+  const fmt = useFormat();
+  // Bed dimensions stay internally in cm (SVG geometry); only the input display converts.
+  const bedVal = (cm: number) => fmt.imperial ? Math.round(fmt.lenVal(cm) * 10) / 10 : cm;
   const [selectedPlantId, setSelectedPlantId] = useState<string | null>(null);
   const [bedWidth, setBedWidth] = useState(120);
   const [bedLength, setBedLength] = useState(300);
@@ -714,15 +732,15 @@ export default function BedVisualizer({ plants }: { plants: { entry: YieldEntry;
           <div className="font-mono text-xs text-amber uppercase">Beet:</div>
           <label className="flex items-center gap-1">
             <span className="font-mono text-xs text-text-muted">B</span>
-            <input type="number" value={bedWidth} min={60} max={200} step={10} onChange={e => setBedWidth(parseInt(e.target.value) || 120)}
+            <input type="number" value={bedVal(bedWidth)} min={60} max={200} step={10} onChange={e => setBedWidth(Math.round(fmt.lenToMetric(parseFloat(e.target.value))) || 120)}
               className="w-12.5 py-0.75 px-1.25 rounded-[5px] bg-bg border border-[rgba(255,255,255,0.1)] font-mono text-xs text-amber outline-none" />
-            <span className="font-mono text-xs text-text-muted">cm ×</span>
+            <span className="font-mono text-xs text-text-muted">{fmt.lenUnit} ×</span>
           </label>
           <label className="flex items-center gap-1">
             <span className="font-mono text-xs text-text-muted">L</span>
-            <input type="number" value={bedLength} min={100} max={600} step={50} onChange={e => setBedLength(parseInt(e.target.value) || 300)}
+            <input type="number" value={bedVal(bedLength)} min={100} max={600} step={50} onChange={e => setBedLength(Math.round(fmt.lenToMetric(parseFloat(e.target.value))) || 300)}
               className="w-12.5 py-0.75 px-1.25 rounded-[5px] bg-bg border border-[rgba(255,255,255,0.1)] font-mono text-xs text-amber outline-none" />
-            <span className="font-mono text-xs text-text-muted">cm</span>
+            <span className="font-mono text-xs text-text-muted">{fmt.lenUnit}</span>
           </label>
         </div>
         <div className="flex items-center gap-2 flex-1 min-w-50">

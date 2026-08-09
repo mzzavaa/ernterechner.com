@@ -3,6 +3,7 @@ import { YIELD_DATA, type YieldEntry, getRipeningTimeline } from '../data/yieldD
 import { WIKI_PLANTS } from '../data/wiki';
 import BedVisualizer from './BedVisualizer';
 import { PlantIcon, resolveIconKey } from '../icons/plant-icons/PlantIcon.tsx';
+import { useFormat, type Format } from '../units';
 
 const WIKI_MAP = new Map(WIKI_PLANTS.map(p => [p.id, p]));
 
@@ -10,16 +11,19 @@ const MO = ['Jän','Feb','Mär','Apr','Mai','Jun','Jul','Aug','Sep','Okt','Nov',
 const MOLONG = ['Jänner','Februar','März','April','Mai','Juni','Juli','August','September','Oktober','November','Dezember'];
 const moRange = (s: number, e: number) => Array.from({length: e - s + 1}, (_,i) => MO[s+i-1]).join('–');
 
-function openPrintPlan(items: CalcState[], persons: number, gardenArea: number | null) {
+function openPrintPlan(items: CalcState[], persons: number, gardenArea: number | null, fmt: Format) {
   const totalArea = items.reduce((s, i) => s + i.areaM2, 0);
   const totalYield = items.reduce((s, i) => s + i.yieldKg, 0);
   const totalKcal = items.reduce((s, i) => s + i.kcal, 0);
   const daysPerPerson = Math.round(totalKcal / (2200 * persons));
   const today = new Date().toLocaleDateString('de-AT', { day: '2-digit', month: 'long', year: 'numeric' });
 
+  // Spacing pair label (both values in active length unit)
+  const L = (cm: number) => fmt.imperial ? fmt.lenVal(cm).toFixed(1) : String(Math.round(cm));
+
   const rows = items.map(({ entry: e, areaM2, plants, yieldKg }) =>
-    `<tr><td><b>${e.name}</b></td><td>${areaM2.toFixed(1)} m²</td><td>${Math.ceil(plants)} Stk</td>`+
-    `<td>${e.spacingCm}×${e.rowSpacingCm} cm</td><td>${yieldKg.toFixed(1)} kg</td>`+
+    `<tr><td><b>${e.name}</b></td><td>${fmt.area(areaM2)}</td><td>${Math.ceil(plants)} Stk</td>`+
+    `<td>${L(e.spacingCm)}×${L(e.rowSpacingCm)} ${fmt.lenUnit}</td><td>${fmt.weight(yieldKg)}</td>`+
     `<td>${moRange(e.harvestStartMonth, e.harvestEndMonth)}</td>`+
     `<td>${e.storageMonths > 0 ? e.storageMonths + ' Mon.' : 'nur frisch'}</td></tr>`
   ).join('');
@@ -30,11 +34,11 @@ function openPrintPlan(items: CalcState[], persons: number, gardenArea: number |
     const n = Math.ceil(plants);
     if (e.sowIndoorMonth) {
       taskList.push({ month: e.sowIndoorMonth, cls: 'indoor', text: `<b>${e.name}</b> vorziehen — ${n} Pflanzen, Anzuchterde` });
-      taskList.push({ month: e.sowOutdoorMonth, cls: 'outdoor', text: `<b>${e.name}</b> auspflanzen — ${e.spacingCm}×${e.rowSpacingCm} cm${e.needsSupport ? ', Stütze einsetzen' : ''}` });
+      taskList.push({ month: e.sowOutdoorMonth, cls: 'outdoor', text: `<b>${e.name}</b> auspflanzen — ${L(e.spacingCm)}×${L(e.rowSpacingCm)} ${fmt.lenUnit}${e.needsSupport ? ', Stütze einsetzen' : ''}` });
     } else {
-      taskList.push({ month: e.sowOutdoorMonth, cls: 'outdoor', text: `<b>${e.name}</b> säen/setzen — ${n} Stk, ${e.spacingCm} cm Abstand` });
+      taskList.push({ month: e.sowOutdoorMonth, cls: 'outdoor', text: `<b>${e.name}</b> säen/setzen — ${n} Stk, ${fmt.len(e.spacingCm)} Abstand` });
     }
-    taskList.push({ month: e.harvestStartMonth, cls: 'harvest', text: `<b>${e.name}</b> Ernte beginnt — ${moRange(e.harvestStartMonth, e.harvestEndMonth)}, ~${e.yieldKgPerM2Low}–${e.yieldKgPerM2High} kg/m²` });
+    taskList.push({ month: e.harvestStartMonth, cls: 'harvest', text: `<b>${e.name}</b> Ernte beginnt — ${moRange(e.harvestStartMonth, e.harvestEndMonth)}, ~${fmt.densityRange(e.yieldKgPerM2Low, e.yieldKgPerM2High)}` });
   });
   taskList.sort((a, b) => a.month - b.month);
   const grouped: Record<number, typeof taskList> = {};
@@ -91,7 +95,7 @@ function openPrintPlan(items: CalcState[], persons: number, gardenArea: number |
     const w = totalAreaForBar > 0 ? (areaM2 / totalAreaForBar) * BAR_W : BAR_W / items.length;
     const seg = `<rect x="${barX+1}" y="1" width="${w-2}" height="${BAR_H-2}" rx="4" fill="${e.color}" opacity="0.25"/>`
       + `<rect x="${barX+1}" y="1" width="${w-2}" height="${BAR_H-2}" rx="4" fill="none" stroke="${e.color}" stroke-width="1.5"/>`
-      + (w > 40 ? `<text x="${barX + w/2}" y="${BAR_H/2 + 4}" text-anchor="middle" font-size="9" fill="${e.color}" font-family="DM Sans,sans-serif" font-weight="700">${e.name} · ${areaM2.toFixed(1)}m²</text>` : '');
+      + (w > 40 ? `<text x="${barX + w/2}" y="${BAR_H/2 + 4}" text-anchor="middle" font-size="9" fill="${e.color}" font-family="DM Sans,sans-serif" font-weight="700">${e.name} · ${fmt.areaVal(areaM2).toFixed(1)}${fmt.areaUnit}</text>` : '');
     barX += w;
     return seg;
   }).join('');
@@ -150,11 +154,11 @@ function openPrintPlan(items: CalcState[], persons: number, gardenArea: number |
     '<div class="hdr">',
     '<div><div style="font-family:\'JetBrains Mono\',monospace;font-size:7pt;color:#888;text-transform:uppercase;letter-spacing:.1em;margin-bottom:3px">Ernterechner · Gartenplan</div>',
     `<h1>Mein Gartenplan</h1></div>`,
-    `<div class="hdr-meta">Erstellt: ${today}<br>${persons} ${persons===1?'Person':'Personen'} · ${items.length} Sorten<br>${gardenArea ? `Garten: ${gardenArea} m²` : 'ernterechner.com'}</div>`,
+    `<div class="hdr-meta">Erstellt: ${today}<br>${persons} ${persons===1?'Person':'Personen'} · ${items.length} Sorten<br>${gardenArea ? `Garten: ${Math.round(fmt.areaVal(gardenArea))} ${fmt.areaUnit}` : 'ernterechner.com'}</div>`,
     '</div>',
     '<div class="pills">',
-    `<div class="pill"><div class="pl">Gesamtfläche</div><div class="pv">${totalArea.toFixed(1)} m²</div>${gardenArea?`<div class="ps">${Math.round(totalArea/gardenArea*100)}% belegt</div>`:''}</div>`,
-    `<div class="pill"><div class="pl">Jahresertrag</div><div class="pv">${totalYield.toFixed(0)} kg</div><div class="ps">${(totalYield/52).toFixed(1)} kg/Woche</div></div>`,
+    `<div class="pill"><div class="pl">Gesamtfläche</div><div class="pv">${fmt.area(totalArea)}</div>${gardenArea?`<div class="ps">${Math.round(totalArea/gardenArea*100)}% belegt</div>`:''}</div>`,
+    `<div class="pill"><div class="pl">Jahresertrag</div><div class="pv">${fmt.weightVal(totalYield).toFixed(0)} ${fmt.weightUnit}</div><div class="ps">${fmt.weightVal(totalYield/52).toFixed(1)} ${fmt.weightUnit}/Woche</div></div>`,
     `<div class="pill"><div class="pl">Kalorien</div><div class="pv">${Math.round(totalKcal/1000)}k</div><div class="ps">kcal gesamt</div></div>`,
     `<div class="pill"><div class="pl">Versorgung</div><div class="pv">${daysPerPerson}</div><div class="ps">Tage/Person (2.200 kcal)</div></div>`,
     '</div>',
@@ -233,6 +237,7 @@ function GardenConfig({ persons, setPersons, gardenArea, setGardenArea, usedArea
   gardenArea: number | null; setGardenArea: (n: number | null) => void;
   usedArea: number;
 }) {
+  const fmt = useFormat();
   const pct = gardenArea ? Math.round((usedArea / gardenArea) * 100) : null;
   const pctColor = pct !== null ? (pct > 80 ? 'var(--c-red)' : pct > 50 ? 'var(--c-amber)' : 'var(--c-green)') : 'var(--c-green)';
   return (
@@ -257,11 +262,11 @@ function GardenConfig({ persons, setPersons, gardenArea, setGardenArea, usedArea
         </div>
         <div className="flex items-center gap-2">
           <input type="number" min={1} step={5}
-            value={gardenArea ?? ''}
+            value={gardenArea == null ? '' : Math.round(fmt.areaVal(gardenArea))}
             placeholder="z.B. 200"
-            onChange={e => setGardenArea(e.target.value ? +e.target.value : null)}
+            onChange={e => setGardenArea(e.target.value ? fmt.areaToMetric(+e.target.value) : null)}
             className="w-20 py-1.25 px-2 rounded-[7px] bg-bg border border-[rgba(255,255,255,0.1)] text-amber font-mono text-sm outline-none" />
-          <span className="font-mono text-xs text-text-muted">m²</span>
+          <span className="font-mono text-xs text-text-muted">{fmt.areaUnit}</span>
           {pct !== null && (
             <div className="flex items-center gap-1.5">
               <div className="w-20 h-1.5 rounded-[3px] bg-[rgba(255,255,255,0.08)] overflow-hidden">
@@ -277,7 +282,7 @@ function GardenConfig({ persons, setPersons, gardenArea, setGardenArea, usedArea
       <div className="flex-1 min-w-50">
         <div className="font-sans text-[13px] font-semibold text-text-muted mb-1">Faustregel Selbstversorgung</div>
         <div className="font-sans text-xs text-text-muted leading-[1.5]">
-          Für <strong className="text-text">{persons} {persons === 1 ? 'Person' : 'Personen'}</strong> werden ca. <strong className="text-amber">{persons * 50}–{persons * 80} m²</strong> Gemüsegarten empfohlen (Heistinger).
+          Für <strong className="text-text">{persons} {persons === 1 ? 'Person' : 'Personen'}</strong> werden ca. <strong className="text-amber">{Math.round(fmt.areaVal(persons * 50))}–{Math.round(fmt.areaVal(persons * 80))} {fmt.areaUnit}</strong> Gemüsegarten empfohlen (Heistinger).
           Davon ca. <strong className="text-primary">⅓ Starkzehrer</strong> (Tomate, Kürbis), <strong className="text-water">⅓ Mittelzehrer</strong> (Karotte, Zwiebel), <strong className="text-text-muted">⅓ Schwachzehrer</strong> (Kräuter, Salat).
         </div>
       </div>
@@ -367,6 +372,7 @@ function PlantInfoBox({ entry }: { entry: YieldEntry }) {
 }
 
 function RipeningDetail({ entry }: { entry: YieldEntry }) {
+  const fmt = useFormat();
   const [open, setOpen] = useState(false);
   const { firstFruitWeeks, fullRipeWeeks } = getRipeningTimeline(entry);
   const stages = entry.colorStages ?? [];
@@ -467,10 +473,10 @@ function RipeningDetail({ entry }: { entry: YieldEntry }) {
               </div>
               <div className="flex flex-wrap gap-1.5">
                 {fs.lengthCm !== undefined && (
-                  <span className="plant-tag">↕ {fs.lengthCm} cm lang</span>
+                  <span className="plant-tag">↕ {fmt.len(fs.lengthCm)} lang</span>
                 )}
                 {fs.diameterCm !== undefined && (
-                  <span className="plant-tag">⌀ {fs.diameterCm} cm</span>
+                  <span className="plant-tag">⌀ {fmt.len(fs.diameterCm)}</span>
                 )}
                 {fs.weightG !== undefined && (
                   <span className="plant-tag">{fs.weightG} g / Stück</span>
@@ -488,8 +494,8 @@ function RipeningDetail({ entry }: { entry: YieldEntry }) {
               Pflanze ausgewachsen
             </div>
             <div className="flex flex-wrap gap-1.5">
-              <span className="plant-tag">Höhe {entry.heightCm} cm</span>
-              <span className="plant-tag">Breite {entry.spreadCm} cm</span>
+              <span className="plant-tag">Höhe {fmt.len(entry.heightCm)}</span>
+              <span className="plant-tag">Breite {fmt.len(entry.spreadCm)}</span>
               <span className="plant-tag">{entry.growthForm}</span>
               {entry.needsSupport && <span className="plant-tag" style={{ color: 'var(--c-amber)' }}>Rankhilfe</span>}
             </div>
@@ -534,6 +540,7 @@ function CalcField({ label, unit, value, color, active, onChange }: {
 function PlantCalcCard({ state, onUpdate, onRemove }: {
   state: CalcState; onUpdate: (s: CalcState) => void; onRemove: () => void;
 }) {
+  const fmt = useFormat();
   const e = state.entry;
   const mult = state.useGlashaus && e.glashausYieldMultiplier ? e.glashausYieldMultiplier : 1;
   const yieldRange = { low: state.areaM2 * e.yieldKgPerM2Low * mult, high: state.areaM2 * e.yieldKgPerM2High * mult };
@@ -556,7 +563,7 @@ function PlantCalcCard({ state, onUpdate, onRemove }: {
               return hasDetail
                 ? `1. Früchte W${firstFruitWeeks} · Vollreif W${fullRipeWeeks}`
                 : `${fullRipeWeeks} Wo. bis Ernte`;
-            })()} · {e.spacingCm}cm Abstand · {e.successionalSowings > 1 ? `${e.successionalSowings}x Staffelaussaat empfohlen` : 'Einmalige Aussaat'}
+            })()} · {fmt.len(e.spacingCm)} Abstand · {e.successionalSowings > 1 ? `${e.successionalSowings}x Staffelaussaat empfohlen` : 'Einmalige Aussaat'}
           </div>
         </div>
         <div className="flex gap-2 items-center">
@@ -572,12 +579,12 @@ function PlantCalcCard({ state, onUpdate, onRemove }: {
       </div>
 
       <div className="grid gap-2.5" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))' }}>
-        <CalcField label="Fläche" unit="m²" value={state.areaM2} color="var(--c-cyan)" active={state.mode === 'area'}
-          onChange={v => onUpdate(recalc(e, 'area', v, state.useGlashaus))} />
+        <CalcField label="Fläche" unit={fmt.areaUnit} value={fmt.areaVal(state.areaM2)} color="var(--c-cyan)" active={state.mode === 'area'}
+          onChange={v => onUpdate(recalc(e, 'area', fmt.areaToMetric(v), state.useGlashaus))} />
         <CalcField label="Pflanzen" unit="Stk" value={state.plants} color="var(--c-green)" active={state.mode === 'plants'}
           onChange={v => onUpdate(recalc(e, 'plants', v, state.useGlashaus))} />
-        <CalcField label="Ertrag" unit="kg" value={state.yieldKg} color="var(--c-amber)" active={state.mode === 'yield'}
-          onChange={v => onUpdate(recalc(e, 'yield', v, state.useGlashaus))} />
+        <CalcField label="Ertrag" unit={fmt.weightUnit} value={fmt.weightVal(state.yieldKg)} color="var(--c-amber)" active={state.mode === 'yield'}
+          onChange={v => onUpdate(recalc(e, 'yield', fmt.weightToMetric(v), state.useGlashaus))} />
         <CalcField label="Kalorien" unit="kcal" value={state.kcal} color="var(--c-red)" active={state.mode === 'kcal'}
           onChange={v => onUpdate(recalc(e, 'kcal', v, state.useGlashaus))} />
       </div>
@@ -592,7 +599,7 @@ function PlantCalcCard({ state, onUpdate, onRemove }: {
         return (
           <div className="mt-3 rounded-xl p-3" style={{ background: e.color + '08', border: `1px solid ${e.color}22` }}>
             <div className="font-mono text-[11px] mb-2" style={{ color: e.color + 'aa' }}>
-              {count} {count === 1 ? 'Pflanze' : 'Pflanzen'} · {state.areaM2.toFixed(1)} m²
+              {count} {count === 1 ? 'Pflanze' : 'Pflanzen'} · {fmt.area(state.areaM2)}
             </div>
             <div className="flex flex-wrap gap-0.5">
               {Array.from({ length: displayCount }).map((_, i) => (
@@ -610,7 +617,7 @@ function PlantCalcCard({ state, onUpdate, onRemove }: {
       })()}
 
       <div className="flex flex-wrap gap-2 mt-3">
-        <span className="plant-tag">Spanne: {yieldRange.low.toFixed(1)}–{yieldRange.high.toFixed(1)} kg</span>
+        <span className="plant-tag">Spanne: {fmt.weightVal(yieldRange.low).toFixed(1)}–{fmt.weightVal(yieldRange.high).toFixed(1)} {fmt.weightUnit}</span>
         <span className="plant-tag">{e.kcalPer100g} kcal/100g</span>
         <span className="plant-tag" style={{ color: e.storageMonths > 0 ? 'var(--c-green)' : undefined }}>
           {e.storageMonths > 0 ? `Lagert ${e.storageMonths} Mon.` : 'Nur frisch'}
@@ -625,6 +632,7 @@ function PlantCalcCard({ state, onUpdate, onRemove }: {
 }
 
 function PlantPicker({ onAdd, exclude }: { onAdd: (e: YieldEntry) => void; exclude: Set<string> }) {
+  const fmt = useFormat();
   const [search, setSearch] = useState('');
   const [cat, setCat] = useState('alle');
   const filtered = YIELD_DATA.filter(e =>
@@ -652,7 +660,7 @@ function PlantPicker({ onAdd, exclude }: { onAdd: (e: YieldEntry) => void; exclu
           <button key={e.plantId} onClick={() => onAdd(e)} className="plant-picker-item" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
             <PlantIcon plant={resolveIconKey(e.plantId)} stage="reif" size={26} />
             <span className="font-sans text-xs text-text font-semibold">{e.name}</span>
-            <span className="font-mono text-xs text-text-muted ml-1">{e.yieldKgPerM2Low}–{e.yieldKgPerM2High} kg/m²</span>
+            <span className="font-mono text-xs text-text-muted ml-1">{fmt.densityRange(e.yieldKgPerM2Low, e.yieldKgPerM2High)}</span>
           </button>
         ))}
         {filtered.length === 0 && <span className="font-sans text-xs text-text-muted">Alle Pflanzen bereits ausgewählt</span>}
@@ -662,6 +670,7 @@ function PlantPicker({ onAdd, exclude }: { onAdd: (e: YieldEntry) => void; exclu
 }
 
 export default function YieldCalculator() {
+  const fmt = useFormat();
   const [items, setItems] = useState<CalcState[]>([]);
   const [persons, setPersons] = useState(4);
   const [gardenArea, setGardenArea] = useState<number | null>(null);
@@ -724,13 +733,13 @@ export default function YieldCalculator() {
         <div className="yield-totals" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', alignItems: 'center' }}>
           <div>
             <div className="font-mono text-xs text-text-muted">Gesamtfläche</div>
-            <div className="font-display text-[1.625rem] font-black text-text">{totalArea.toFixed(1)} <span className="text-sm text-text-muted">m²</span></div>
+            <div className="font-display text-[1.625rem] font-black text-text">{fmt.areaVal(totalArea).toFixed(1)} <span className="text-sm text-text-muted">{fmt.areaUnit}</span></div>
             {gardenArea && <div className="font-mono text-xs text-text-muted">{Math.round(totalArea / gardenArea * 100)}% deines Gartens</div>}
           </div>
           <div>
             <div className="font-mono text-xs text-primary">Gesamtertrag</div>
-            <div className="font-display text-[1.625rem] font-black text-primary">{totalYield.toFixed(0)} <span className="text-sm">kg</span></div>
-            <div className="font-mono text-xs text-text-muted">{(totalYield / 52).toFixed(1)} kg/Woche</div>
+            <div className="font-display text-[1.625rem] font-black text-primary">{fmt.weightVal(totalYield).toFixed(0)} <span className="text-sm">{fmt.weightUnit}</span></div>
+            <div className="font-mono text-xs text-text-muted">{fmt.weightVal(totalYield / 52).toFixed(1)} {fmt.weightUnit}/Woche</div>
           </div>
           <div>
             <div className="font-mono text-xs text-amber">Kalorien gesamt</div>
@@ -744,7 +753,7 @@ export default function YieldCalculator() {
           </div>
           <div className="flex flex-col gap-2">
             <button
-              onClick={() => openPrintPlan(items, persons, gardenArea)}
+              onClick={() => openPrintPlan(items, persons, gardenArea, fmt)}
               className="flex items-center gap-2 rounded-xl px-3 py-2.5 font-sans text-[13px] font-semibold cursor-pointer transition-all"
               style={{ background: 'rgba(93,143,46,0.12)', border: '1px solid rgba(93,143,46,0.3)', color: 'var(--c-green)' }}
             >
