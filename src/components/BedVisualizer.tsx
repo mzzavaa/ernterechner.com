@@ -50,129 +50,6 @@ interface VisPlant {
   selectedVarietyIdx: number;
 }
 
-// ── Plant-position view: the shared bed plan rendered with stage icons ────
-function DotGridView({ plan, plants, cursorWeek }: {
-  plan: BedPlan;
-  plants: VisPlant[];
-  cursorWeek: number;
-}) {
-  const fmt = useFormat();
-  const t = useT();
-  const pname = usePlantName();
-  const cal = useCal();
-  const PAD_L = 30;
-  const PAD_B = 18;
-  const SVG_W = 580;
-  const plotW = SVG_W - PAD_L;
-  // Show the FULL plan even when it exceeds the bed - the overhang is drawn
-  // as a marked "doesn't fit" region instead of silently squeezing plants.
-  const displayLen = Math.max(plan.bedLengthCm, plan.requiredLengthCm);
-  const scale = Math.min(plotW / displayLen, 250 / plan.bedWidthCm);
-  const bedPx = plan.bedLengthCm * scale;
-  const usedPx = displayLen * scale;
-  const plotH = plan.bedWidthCm * scale;
-  const svgH = plotH + PAD_B;
-  const cursorMonthFrac = cursorWeek / 4.33;
-  const gridStepCm = displayLen > 400 ? 100 : 50;
-  const gridStepCmY = plan.bedWidthCm > 150 ? 50 : 25;
-
-  return (
-    <div>
-      <div className="font-sans text-[13px] font-semibold text-amber mb-1.5">
-        {t('Pflanzenpositionen', 'Plant positions')} · {cal.kw} {cursorWeek + 1} · {cal.moLong[Math.min(11, Math.floor(cursorMonthFrac))]} ({dimPair(fmt, plan.bedLengthCm, plan.bedWidthCm)})
-      </div>
-      <svg viewBox={`0 0 ${SVG_W} ${svgH}`} className="w-full rounded-[10px] border border-[rgba(255,255,255,0.08)] bg-bg" style={{ maxHeight: 320 }}>
-        {Array.from({ length: Math.floor(displayLen / gridStepCm) + 1 }).map((_, i) => (
-          <line key={`gx${i}`} x1={PAD_L + i * gridStepCm * scale} y1={0} x2={PAD_L + i * gridStepCm * scale} y2={plotH}
-            stroke="rgba(255,255,255,0.05)" strokeWidth={0.5} />
-        ))}
-        {Array.from({ length: Math.floor(plan.bedWidthCm / gridStepCmY) + 1 }).map((_, i) => (
-          <line key={`gy${i}`} x1={PAD_L} y1={i * gridStepCmY * scale} x2={PAD_L + usedPx} y2={i * gridStepCmY * scale}
-            stroke="rgba(255,255,255,0.05)" strokeWidth={0.5} />
-        ))}
-        {plan.zones.slice(1).map((z, i) => (
-          <line key={i} x1={PAD_L + z.startCm * scale} y1={0} x2={PAD_L + z.startCm * scale} y2={plotH}
-            stroke="rgba(255,255,255,0.15)" strokeWidth={1} strokeDasharray="4,3" />
-        ))}
-        <rect x={PAD_L} y={0} width={bedPx} height={plotH} fill="none" stroke="rgba(255,255,255,0.12)" strokeWidth={1} />
-        {!plan.fits && (
-          <g>
-            <rect x={PAD_L + bedPx} y={0} width={usedPx - bedPx} height={plotH} fill="var(--c-red)" opacity={0.07} />
-            <rect x={PAD_L + bedPx} y={0} width={usedPx - bedPx} height={plotH} fill="none" stroke="var(--c-red)" strokeWidth={1} strokeDasharray="5,3" opacity={0.6} />
-            <text x={PAD_L + (bedPx + usedPx) / 2} y={12} fontSize={8} fill="var(--c-red)" textAnchor="middle" fontFamily="monospace">
-              {t('passt nicht', "doesn't fit")}
-            </text>
-          </g>
-        )}
-        {plan.fits && plan.spareCm * scale > 40 && (
-          <text x={PAD_L + (plan.requiredLengthCm * scale + bedPx) / 2} y={plotH / 2} fontSize={8} fill="var(--c-sub)" textAnchor="middle" fontFamily="monospace" opacity={0.5}>
-            {svgLen(fmt, plan.spareCm)} {t('frei', 'free')}
-          </text>
-        )}
-        {plan.zones.map(zone => {
-          const e = zone.entry;
-          const vp = plants.find(p => p.entry.plantId === e.plantId);
-          const vis = PLANT_VISUAL_MAP.get(e.plantId);
-          const stage = getPlantStage(e.sowIndoorMonth, e.sowOutdoorMonth, e.harvestStartMonth, e.harvestEndMonth, cursorMonthFrac);
-          const fruitRipe = vis?.varieties[vp?.selectedVarietyIdx ?? 0]?.fruitColor ?? vis?.fruitColor ?? e.color;
-          const leafColor = vis?.leafColor ?? '#5D8F2E';
-          const dotColor = stage.phase === 'dormant' ? 'rgba(255,255,255,0.15)'
-            : stage.phase === 'harvest' ? fruitRipe : leafColor;
-          const iconStage: Stage = stage.phase === 'dormant' ? 'aussaat'
-            : stage.phase === 'indoor' ? 'keimling'
-            : stage.phase === 'growing' ? 'jungpflanze'
-            : 'reif'; // harvest + past both show reif (past fades via opacity)
-          const rowPitchCm = plan.bedWidthCm / zone.rows;
-          const sz = Math.max(8, Math.min(52, e.spacingCm * scale * 0.9, rowPitchCm * scale * 0.9));
-          const uri = getPlantDataUri(e.plantId, iconStage);
-          const scaled = Math.max(stage.phase === 'dormant' ? 5 : 4, sz * Math.max(0.12, stage.plantFraction));
-          const opacity = stage.phase === 'past' ? Math.max(0.15, stage.plantFraction * 0.8)
-            : stage.phase === 'dormant' ? 0.4
-            : stage.plantFraction < 0.15 ? 0.35 : 0.92;
-
-          return (
-            <g key={e.plantId}>
-              {zone.positions.map((pos, i) => {
-                const cx = PAD_L + pos.xCm * scale;
-                const soilY = pos.yCm * scale + sz / 2;
-                return uri ? (
-                  <image key={i} href={uri} x={cx - scaled / 2} y={soilY - scaled} width={scaled} height={scaled} opacity={opacity} />
-                ) : (
-                  <circle key={i} cx={cx} cy={pos.yCm * scale} r={Math.max(1.5, scaled * 0.3)} fill={dotColor} opacity={opacity} />
-                );
-              })}
-              <text x={PAD_L + (zone.startCm + zone.lengthCm / 2) * scale} y={plotH - 5}
-                fontSize={8} fill={vis?.fruitColor ?? e.color} textAnchor="middle" fontFamily="monospace" opacity={0.65} fontWeight="bold">{pname(e)}</text>
-            </g>
-          );
-        })}
-        {Array.from({ length: Math.floor(displayLen / gridStepCm) + 1 }).map((_, i) => (
-          <text key={i} x={PAD_L + i * gridStepCm * scale} y={plotH + 13}
-            fontSize={7} fill="rgba(255,255,255,0.3)" textAnchor="middle" fontFamily="monospace">{i * gridStepCm}</text>
-        ))}
-        <text x={PAD_L + usedPx} y={plotH + 13} fontSize={6} fill="rgba(255,255,255,0.18)" textAnchor="end" fontFamily="monospace">cm</text>
-        {Array.from({ length: Math.floor(plan.bedWidthCm / gridStepCmY) + 1 }).map((_, i) => (
-          <text key={i} x={PAD_L - 4} y={i * gridStepCmY * scale + 3}
-            fontSize={7} fill="rgba(255,255,255,0.3)" textAnchor="end" fontFamily="monospace">{i * gridStepCmY}</text>
-        ))}
-      </svg>
-      <div className="flex flex-wrap gap-x-3 gap-y-1 mt-2">
-        {plants.map(p => {
-          const stage = getPlantStage(p.entry.sowIndoorMonth, p.entry.sowOutdoorMonth, p.entry.harvestStartMonth, p.entry.harvestEndMonth, cursorMonthFrac);
-          const phaseLabel = stage.phase === 'dormant' ? t('ruhend', 'dormant') : stage.phase === 'harvest' ? t('erntereif', 'ready to harvest') : stage.phase === 'indoor' ? t('Vorkultur', 'indoor start') : stage.phase === 'past' ? t('verblüht', 'spent') : t('wächst', 'growing');
-          return (
-            <div key={p.entry.plantId} className="flex items-center gap-1.5">
-              <PlantIcon plant={resolveIconKey(p.entry.plantId)} stage={stage.phase === 'dormant' ? 'aussaat' : stage.phase === 'indoor' ? 'keimling' : stage.phase === 'growing' ? 'jungpflanze' : 'reif'} size={20} />
-              <span className="font-mono text-[11px] text-text">{pname(p.entry)}</span>
-              <span className="font-mono text-[11px] text-text-muted">{p.count}x · {phaseLabel}</span>
-            </div>
-          );
-        })}
-      </div>
-    </div>
-  );
-}
-
 // ── Top-down bed view: the same plan drawn as true-scale canopies ─────────
 function BedTopView({ plan, plants, cursorWeek, onVarietyChange }: {
   plan: BedPlan;
@@ -314,6 +191,20 @@ function BedTopView({ plan, plants, cursorWeek, onVarietyChange }: {
         <text x={usedPx - 6 - 25 * scale} y={9} fontSize={8} fill="var(--c-sub)" textAnchor="middle" fontFamily="monospace">{svgLen(fmt, 50)}</text>
       </svg>
 
+      <div className="flex flex-wrap gap-x-3 gap-y-1 mt-2">
+        {plants.map(p => {
+          const stage = getPlantStage(p.entry.sowIndoorMonth, p.entry.sowOutdoorMonth, p.entry.harvestStartMonth, p.entry.harvestEndMonth, cursorWeek / 4.33);
+          const phaseLabel = stage.phase === 'dormant' ? t('ruhend', 'dormant') : stage.phase === 'harvest' ? t('erntereif', 'ready to harvest') : stage.phase === 'indoor' ? t('Vorkultur', 'indoor start') : stage.phase === 'past' ? t('verblüht', 'spent') : t('wächst', 'growing');
+          return (
+            <div key={p.entry.plantId} className="flex items-center gap-1.5">
+              <PlantIcon plant={resolveIconKey(p.entry.plantId)} stage={stage.phase === 'dormant' ? 'aussaat' : stage.phase === 'indoor' ? 'keimling' : stage.phase === 'growing' ? 'jungpflanze' : 'reif'} size={20} />
+              <span className="font-mono text-[11px] text-text">{pname(p.entry)}</span>
+              <span className="font-mono text-[11px] text-text-muted">{p.count}x · {phaseLabel}</span>
+            </div>
+          );
+        })}
+      </div>
+
       <div className="flex flex-wrap gap-1.5 mt-2">
         {plants.map((p, zoneIdx) => {
           const vis = PLANT_VISUAL_MAP.get(p.entry.plantId);
@@ -430,8 +321,9 @@ function SideView({ plants, cursorWeek }: { plants: VisPlant[]; cursorWeek: numb
           // image (matching the square viewBox, so no preserveAspectRatio
           // alignment is involved - WebKit and Blink resolve it differently for
           // intrinsic-size-less SVGs) sized so the above-soil part of the icon
-          // equals the plant's scaled height, and anchor its soil line on baseY.
-          const iconSide = Math.max(16, Math.min(h * (64 / 54), barW * 1.5));
+          // equals the plant's TRUE scaled height - neighbouring foliage may
+          // overlap slightly, exactly as it does in a real bed.
+          const iconSide = Math.max(16, h * (64 / 54));
           const iconY = baseY - iconSide * (54 / 64);
 
           return (
@@ -450,7 +342,12 @@ function SideView({ plants, cursorWeek }: { plants: VisPlant[]; cursorWeek: numb
                 <ellipse cx={x} cy={baseY - h / 2} rx={Math.min(barW * 0.4, h * 0.3)} ry={h / 2} fill={leafColor} opacity={isPast ? 0.25 : 0.45} stroke={leafColor} strokeWidth={1} />
               )}
               <text x={x} y={baseY + 14} fontSize={7} fill={isPast ? 'var(--c-sub)' : 'var(--c-text)'} textAnchor="middle" fontFamily="monospace" opacity={isPast ? 0.5 : 1}>{pname(e)}</text>
-              {!isPast && <text x={x} y={Math.min(iconY, baseY - h) - 3} fontSize={7} fill={leafColor} textAnchor="middle" fontFamily="monospace">{svgLen(fmt, e.heightCm * stage.plantFraction)}</text>}
+              {!isPast && (
+                <g>
+                  <line x1={x - barW * 0.35} y1={baseY - h} x2={x + barW * 0.35} y2={baseY - h} stroke={leafColor} strokeWidth={0.7} strokeDasharray="2,2" opacity={0.55} />
+                  <text x={x} y={Math.min(iconY, baseY - h) - 3} fontSize={7} fill={leafColor} textAnchor="middle" fontFamily="monospace">{svgLen(fmt, e.heightCm * stage.plantFraction)}</text>
+                </g>
+              )}
               {isPast && stage.plantFraction > 0.1 && <text x={x} y={Math.min(iconY, baseY - h) - 3} fontSize={6} fill="var(--c-sub)" textAnchor="middle" fontFamily="monospace" opacity={0.5}>{t('verblüht', 'spent')}</text>}
             </g>
           );
@@ -777,7 +674,6 @@ export default function BedVisualizer({ plants }: { plants: { entry: YieldEntry;
   const [bedLength, setBedLength] = useState(300);
   const now = new Date();
   const [cursorWeek, setCursorWeek] = useState(() => Math.min(51, Math.floor((now.getMonth() * 4.33) + now.getDate() / 7)));
-  const [viewTab, setViewTab] = useState<'dots' | 'zones'>('dots');
   const [visPlants, setVisPlants] = useState<VisPlant[]>(() =>
     plants.map(p => ({ entry: p.entry, count: Math.max(1, Math.round(p.areaM2 * p.entry.plantsPerM2)), areaM2: p.areaM2, selectedVarietyIdx: 0 }))
   );
@@ -846,20 +742,8 @@ export default function BedVisualizer({ plants }: { plants: { entry: YieldEntry;
       <FitSummary plan={plan} />
       <CompanionPanel plan={plan} />
 
-      <div className="flex gap-1 mb-3">
-        {([['dots', t('Pflanzen', 'Plants')], ['zones', t('Beetskizze', 'Bed sketch')]] as const).map(([tab, label]) => (
-          <button key={tab} onClick={() => setViewTab(tab)}
-            className={`bed-view-tab${viewTab === tab ? ' bed-view-tab--active' : ''}`}>
-            {label}
-          </button>
-        ))}
-      </div>
-
       <div className="mb-4">
-        {viewTab === 'dots'
-          ? <DotGridView plan={plan} plants={visPlants} cursorWeek={cursorWeek} />
-          : <BedTopView plan={plan} plants={visPlants} cursorWeek={cursorWeek} onVarietyChange={handleVarietyChange} />
-        }
+        <BedTopView plan={plan} plants={visPlants} cursorWeek={cursorWeek} onVarietyChange={handleVarietyChange} />
       </div>
 
       <div className="mb-4">

@@ -103,12 +103,12 @@ export const WIKI_PLANTS_EN: WikiPlant[] = [
     ],
   },
   {
-    id: 'melanzani', name: 'Aubergine', lat: 'Solanum melongena', family: 'Nightshade family', familyLat: 'Solanaceae',
+    id: 'melanzani', name: 'Eggplant', lat: 'Solanum melongena', family: 'Nightshade family', familyLat: 'Solanaceae',
     color: '#f59e0b', emoji: '🍆', sun: 'Full sun, very warm', water: 'Regular', nutrient: 'Heavy feeder',
     sowing: 'Indoor sowing: late February (long germination!)', planting: 'Planting out: after the Ice Saints, better in the greenhouse',
     harvest: 'Harvest: August – October',
     partners: 'Basil, marigold, bean', enemies: 'Tomato (same family, keep distance)',
-    beginnerTip: 'Aubergines need it even warmer than bell peppers. In Burgenland outdoor growing is possible in a sheltered spot, but it is a safer bet in the greenhouse. One plant yields 5–8 fruits.',
+    beginnerTip: 'Eggplants need it even warmer than bell peppers. In Burgenland outdoor growing is possible in a sheltered spot, but it is a safer bet in the greenhouse. One plant yields 5–8 fruits.',
     steps: [
       'Sow very early in spring - 3 months of indoor growing is fine',
       'When planting out, add a mulch layer for warm soil',
@@ -122,9 +122,9 @@ export const WIKI_PLANTS_EN: WikiPlant[] = [
     sourceIds: ['heistinger', 'palme', 'boku'],
     relatedIds: ['tomate', 'paprika', 'chili'],
     furtherReading: [
-      'Heistinger, A.: Handbuch Bio-Gemüse, Chapter Solanaceae (aubergine)',
+      'Heistinger, A.: Handbuch Bio-Gemüse, Chapter Solanaceae (eggplant)',
       'Palme, W.: Gemüse und Kräuter im Hausgarten – greenhouse crops, Chapter Solanaceae',
-      'BOKU Wien: Aubergine growing trials in the Central European climate',
+      'BOKU Wien: Eggplant growing trials in the Central European climate',
     ],
   },
   {
