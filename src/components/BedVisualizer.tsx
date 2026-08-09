@@ -98,17 +98,25 @@ function DotGridView({ plants, bedWidthCm, bedLengthCm, cursorWeek }: {
 
       // Try natural spacing first. A row only counts if the plant's canopy
       // still fits inside the bed - a row centred ON the bottom edge would
-      // render half outside the plot (and over the axis labels).
+      // render half outside the plot (and over the axis labels). The resulting
+      // grid is centred in the zone so leftover space splits evenly on all
+      // sides instead of packing the plants into the top-left corner.
+      const rowYs: number[] = [];
+      for (let py = rowSpacingPx / 2; py + rowSpacingPx * 0.25 <= plotH && rowYs.length < 40; py += rowSpacingPx) rowYs.push(py);
+      if (!rowYs.length) rowYs.push(plotH / 2);
+      const colXs: number[] = [];
+      for (let px = spacingPx / 2; px <= zoneW - spacingPx * 0.25 && colXs.length < 40; px += spacingPx) colXs.push(px);
+      if (!colXs.length) colXs.push(zoneW / 2);
+      const dy = (plotH - rowYs[0] - rowYs[rowYs.length - 1]) / 2;
+      const dx = (zoneW - colXs[0] - colXs[colXs.length - 1]) / 2;
+
       const naturalDots: typeof result = [];
-      let py = rowSpacingPx / 2;
-      while (py + rowSpacingPx * 0.25 <= plotH && naturalDots.length < 800) {
-        let px = spacingPx / 2;
-        while (px <= zoneW - spacingPx * 0.25 && naturalDots.length < 800) {
-          const sz = Math.max(8, Math.min(36, spacingPx * 0.85, rowSpacingPx * 0.85));
-          naturalDots.push({ cx: PAD_L + curZoneX + px, cy: py, color: dotColor, plantId: e.plantId, iconStage, iconSize: sz, plantFraction: stage.plantFraction, phase: stage.phase });
-          px += spacingPx;
+      const sz = Math.max(8, Math.min(52, spacingPx * 0.85, rowSpacingPx * 0.85));
+      outer: for (const py of rowYs) {
+        for (const px of colXs) {
+          if (naturalDots.length >= 800) break outer;
+          naturalDots.push({ cx: PAD_L + curZoneX + px + dx, cy: py + dy, color: dotColor, plantId: e.plantId, iconStage, iconSize: sz, plantFraction: stage.plantFraction, phase: stage.phase });
         }
-        py += rowSpacingPx;
       }
 
       if (naturalDots.length >= plant.count) {
@@ -119,7 +127,7 @@ function DotGridView({ plants, bedWidthCm, bedLengthCm, cursorWeek }: {
         const rows = Math.ceil(plant.count / cols);
         const cellW = zoneW / cols;
         const cellH = plotH / rows;
-        const sz = Math.max(8, Math.min(36, cellW * 0.75, cellH * 0.75));
+        const sz = Math.max(8, Math.min(52, cellW * 0.75, cellH * 0.75));
         for (let r = 0; r < rows; r++) {
           for (let c = 0; c < cols; c++) {
             if (r * cols + c >= plant.count) break;
@@ -291,15 +299,21 @@ function BedTopView({ plants, bedWidthCm, bedLengthCm, cursorWeek, onVarietyChan
           const fruitSizePx = vis ? Math.max(2, (vis.fruitSizeCm / e.spreadCm) * baseRadius * 2) : 4;
           const fruitR = Math.max(1.5, fruitSizePx * 0.5 * stage.plantFraction);
 
+          // Row/column layout uses the full-grown canopy (baseRadius) so plant
+          // positions stay put across the season, and the grid is centred in
+          // the zone instead of hugging the top-left corner.
+          const rowYs: number[] = [];
+          for (let py = rowSpacing / 2; py + baseRadius <= svgH && rowYs.length < 20; py += rowSpacing) rowYs.push(py);
+          if (!rowYs.length) rowYs.push(svgH / 2);
+          const colXs: number[] = [];
+          for (let px = plantSpacing / 2; px + baseRadius <= w && colXs.length < 20; px += plantSpacing) colXs.push(px);
+          if (!colXs.length) colXs.push(w / 2);
+          const dy = (svgH - rowYs[0] - rowYs[rowYs.length - 1]) / 2;
+          const dx = (w - colXs[0] - colXs[colXs.length - 1]) / 2;
+
           const positions: { px: number; py: number }[] = [];
-          let py = rowSpacing / 2;
-          while (py + radius <= svgH && positions.length < 200) {
-            let px = x + plantSpacing / 2;
-            while (px + radius <= x + w && positions.length < 200) {
-              positions.push({ px, py });
-              px += plantSpacing;
-            }
-            py += rowSpacing;
+          for (const py of rowYs) for (const px of colXs) {
+            if (positions.length < 200) positions.push({ px: x + px + dx, py: py + dy });
           }
 
           const showFruits = stage.fruitFraction > 0 && !vis?.isLeafCrop && !vis?.fruitBelowGround;
@@ -414,6 +428,9 @@ function SideView({ plants, cursorWeek }: { plants: VisPlant[]; cursorWeek: numb
   const svgH = 200;
   const barGap = 8;
   const barW = Math.min(60, (svgW - barGap * (plants.length + 1)) / plants.length);
+  // Centre the row of plants - with few plants the capped bar width would
+  // otherwise leave the right side of the bed empty.
+  const barsPad = Math.max(0, (svgW - (plants.length * (barW + barGap) + barGap)) / 2);
   const hScale = (svgH - 40) / maxH;
 
   return (
@@ -435,7 +452,7 @@ function SideView({ plants, cursorWeek }: { plants: VisPlant[]; cursorWeek: numb
           const vis = PLANT_VISUAL_MAP.get(e.plantId);
           const stage = getPlantStage(e.sowIndoorMonth, e.sowOutdoorMonth, e.harvestStartMonth, e.harvestEndMonth, cursorWeek / 4.33);
           const leafColor = vis?.leafColor ?? '#3a7a2a';
-          const x = barGap + i * (barW + barGap) + barW / 2;
+          const x = barsPad + barGap + i * (barW + barGap) + barW / 2;
           const fullH = e.heightCm * hScale;
           const h = fullH * stage.plantFraction;
           const baseY = svgH - 20;
