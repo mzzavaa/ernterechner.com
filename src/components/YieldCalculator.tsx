@@ -212,12 +212,16 @@ const FRUIT_NOTE_EN: Record<string, string> = {
   'Superschmelz-Sorten ohne Verholzung bis 25 cm': 'Superschmelz varieties without woodiness up to 25 cm',
 };
 
-const MO = ['Jän','Feb','Mär','Apr','Mai','Jun','Jul','Aug','Sep','Okt','Nov','Dez'];
-const MOLONG = ['Jänner','Februar','März','April','Mai','Juni','Juli','August','September','Oktober','November','Dezember'];
-const moRange = (s: number, e: number) => Array.from({length: e - s + 1}, (_,i) => MO[s+i-1]).join('–');
+const MO_DE = ['Jän','Feb','Mär','Apr','Mai','Jun','Jul','Aug','Sep','Okt','Nov','Dez'];
+const MOLONG_DE = ['Jänner','Februar','März','April','Mai','Juni','Juli','August','September','Oktober','November','Dezember'];
+const MO_EN = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+const MOLONG_EN = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+const moRange = (mo: string[], s: number, e: number) => Array.from({length: e - s + 1}, (_,i) => mo[s+i-1]).join('–');
 
 function openPrintPlan(items: CalcState[], persons: number, gardenArea: number | null, fmt: Format, t: TFn, lang: Lang) {
   const pn = (e: YieldEntry) => plantName(e.plantId, e.name, lang);
+  const mo = lang === 'en' ? MO_EN : MO_DE;
+  const moLong = lang === 'en' ? MOLONG_EN : MOLONG_DE;
   // Separator between an item and its detail. German keeps its original em-dash
   // (unchanged output); English uses an en-dash instead.
   const sep = t('—', '–');
@@ -225,7 +229,7 @@ function openPrintPlan(items: CalcState[], persons: number, gardenArea: number |
   const totalYield = items.reduce((s, i) => s + i.yieldKg, 0);
   const totalKcal = items.reduce((s, i) => s + i.kcal, 0);
   const daysPerPerson = Math.round(totalKcal / (2200 * persons));
-  const today = new Date().toLocaleDateString('de-AT', { day: '2-digit', month: 'long', year: 'numeric' });
+  const today = new Date().toLocaleDateString(lang === 'en' ? 'en-GB' : 'de-AT', { day: '2-digit', month: 'long', year: 'numeric' });
 
   // Spacing pair label (both values in active length unit)
   const L = (cm: number) => fmt.imperial ? fmt.lenVal(cm).toFixed(1) : String(Math.round(cm));
@@ -233,7 +237,7 @@ function openPrintPlan(items: CalcState[], persons: number, gardenArea: number |
   const rows = items.map(({ entry: e, areaM2, plants, yieldKg }) =>
     `<tr><td><b>${pn(e)}</b></td><td>${fmt.area(areaM2)}</td><td>${Math.ceil(plants)} ${t('Stk', 'pcs')}</td>`+
     `<td>${L(e.spacingCm)}×${L(e.rowSpacingCm)} ${fmt.lenUnit}</td><td>${fmt.weight(yieldKg)}</td>`+
-    `<td>${moRange(e.harvestStartMonth, e.harvestEndMonth)}</td>`+
+    `<td>${moRange(mo, e.harvestStartMonth, e.harvestEndMonth)}</td>`+
     `<td>${e.storageMonths > 0 ? e.storageMonths + ' ' + t('Mon.', 'mo.') : t('nur frisch', 'fresh only')}</td></tr>`
   ).join('');
 
@@ -247,13 +251,13 @@ function openPrintPlan(items: CalcState[], persons: number, gardenArea: number |
     } else {
       taskList.push({ month: e.sowOutdoorMonth, cls: 'outdoor', text: `<b>${pn(e)}</b> ${t('säen/setzen', 'sow/set')} ${sep} ${n} ${t('Stk', 'pcs')}, ${fmt.len(e.spacingCm)} ${t('Abstand', 'spacing')}` });
     }
-    taskList.push({ month: e.harvestStartMonth, cls: 'harvest', text: `<b>${pn(e)}</b> ${t('Ernte beginnt', 'harvest begins')} ${sep} ${moRange(e.harvestStartMonth, e.harvestEndMonth)}, ~${fmt.densityRange(e.yieldKgPerM2Low, e.yieldKgPerM2High)}` });
+    taskList.push({ month: e.harvestStartMonth, cls: 'harvest', text: `<b>${pn(e)}</b> ${t('Ernte beginnt', 'harvest begins')} ${sep} ${moRange(mo, e.harvestStartMonth, e.harvestEndMonth)}, ~${fmt.densityRange(e.yieldKgPerM2Low, e.yieldKgPerM2High)}` });
   });
   taskList.sort((a, b) => a.month - b.month);
   const grouped: Record<number, typeof taskList> = {};
   taskList.forEach(t => { (grouped[t.month] ??= []).push(t); });
-  const taskHTML = Object.entries(grouped).map(([mo, ts]) =>
-    `<div class="tmonth"><div class="tmo-label">${MOLONG[+mo-1]}</div>${ts.map(t =>
+  const taskHTML = Object.entries(grouped).map(([m, ts]) =>
+    `<div class="tmonth"><div class="tmo-label">${moLong[+m-1]}</div>${ts.map(t =>
       `<div class="titem t-${t.cls}"><span class="tdot"></span><span>${t.text}</span></div>`
     ).join('')}</div>`
   ).join('');
@@ -315,8 +319,8 @@ function openPrintPlan(items: CalcState[], persons: number, gardenArea: number |
   const shopItems = items.flatMap(({ entry: e, plants }) => {
     const n = Math.ceil(plants);
     const base = e.sowIndoorMonth
-      ? `${n}× <b>${pn(e)}</b> ${sep} ${t('Saatgut (Vorkultur ab', 'seeds (start indoors from')} ${MOLONG[e.sowIndoorMonth-1]})`
-      : `${n}× <b>${pn(e)}</b> ${sep} ${t('Samen (Direktsaat', 'seeds (direct sowing')} ${MOLONG[e.sowOutdoorMonth-1]})`;
+      ? `${n}× <b>${pn(e)}</b> ${sep} ${t('Saatgut (Vorkultur ab', 'seeds (start indoors from')} ${moLong[e.sowIndoorMonth-1]})`
+      : `${n}× <b>${pn(e)}</b> ${sep} ${t('Samen (Direktsaat', 'seeds (direct sowing')} ${moLong[e.sowOutdoorMonth-1]})`;
     return e.needsSupport ? [base, `&nbsp;&nbsp;↳ ${n} ${t('Rankhilfen / Stäbe für', 'supports / stakes for')} ${pn(e)}`] : [base];
   });
   shopItems.push(t('Anzuchterde + Töpfe, Etiketten, Schnur / Raffiabast', 'Seed compost + pots, labels, string / raffia'));

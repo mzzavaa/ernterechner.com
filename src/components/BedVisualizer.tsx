@@ -35,8 +35,20 @@ const dimPair = (fmt: Format, lCm: number, wCm: number) =>
 const svgLen = (fmt: Format, cm: number) =>
   fmt.imperial ? `${fmt.lenVal(cm).toFixed(1)}in` : `${Math.round(cm)}cm`;
 
-const MONTHS = ['Jan', 'Feb', 'Mär', 'Apr', 'Mai', 'Jun', 'Jul', 'Aug', 'Sep', 'Okt', 'Nov', 'Dez'];
-const MONTHS_LONG = ['Januar', 'Februar', 'März', 'April', 'Mai', 'Juni', 'Juli', 'August', 'September', 'Oktober', 'November', 'Dezember'];
+const MONTHS_DE = ['Jan', 'Feb', 'Mär', 'Apr', 'Mai', 'Jun', 'Jul', 'Aug', 'Sep', 'Okt', 'Nov', 'Dez'];
+const MONTHS_LONG_DE = ['Januar', 'Februar', 'März', 'April', 'Mai', 'Juni', 'Juli', 'August', 'September', 'Oktober', 'November', 'Dezember'];
+const MONTHS_EN = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+const MONTHS_LONG_EN = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+
+// Localised calendar labels: month names + the week prefix ("KW 33" / "Week 33").
+function useCal() {
+  const { lang } = useLang();
+  return {
+    mo: lang === 'en' ? MONTHS_EN : MONTHS_DE,
+    moLong: lang === 'en' ? MONTHS_LONG_EN : MONTHS_LONG_DE,
+    kw: lang === 'en' ? 'Week' : 'KW',
+  };
+}
 
 interface VisPlant {
   entry: YieldEntry;
@@ -55,6 +67,7 @@ function DotGridView({ plants, bedWidthCm, bedLengthCm, cursorWeek }: {
   const fmt = useFormat();
   const t = useT();
   const pname = usePlantName();
+  const cal = useCal();
   const PAD_L = 30;
   const PAD_B = 18;
   const SVG_W = 580;
@@ -147,7 +160,7 @@ function DotGridView({ plants, bedWidthCm, bedLengthCm, cursorWeek }: {
   return (
     <div>
       <div className="font-sans text-[13px] font-semibold text-amber mb-1.5">
-        {t('Pflanzenpositionen', 'Plant positions')} · KW {cursorWeek + 1} · {MONTHS_LONG[Math.min(11, Math.floor(cursorMonthFrac))]} ({dimPair(fmt, bedLengthCm, bedWidthCm)})
+        {t('Pflanzenpositionen', 'Plant positions')} · {cal.kw} {cursorWeek + 1} · {cal.moLong[Math.min(11, Math.floor(cursorMonthFrac))]} ({dimPair(fmt, bedLengthCm, bedWidthCm)})
       </div>
       <svg viewBox={`0 0 ${SVG_W} ${svgH}`} className="w-full rounded-[10px] border border-[rgba(255,255,255,0.08)] bg-bg" style={{ maxHeight: 320 }}>
         {Array.from({ length: Math.floor(bedLengthCm / gridStepCm) + 1 }).map((_, i) => (
@@ -221,6 +234,7 @@ function BedTopView({ plants, bedWidthCm, bedLengthCm, cursorWeek, onVarietyChan
   const fmt = useFormat();
   const t = useT();
   const pname = usePlantName();
+  const cal = useCal();
   const { vname, vdesc } = useVariety();
   const svgW = 560;
   const scale = svgW / bedLengthCm;
@@ -240,7 +254,7 @@ function BedTopView({ plants, bedWidthCm, bedLengthCm, cursorWeek, onVarietyChan
   return (
     <div>
       <div className="font-sans text-[13px] font-semibold text-amber mb-1.5">
-        {t('Draufsicht', 'Top view')} · KW {cursorWeek + 1} · {MONTHS_LONG[Math.min(11, Math.floor(cursorWeek / 4.33))]} ({dimPair(fmt, bedLengthCm, bedWidthCm)})
+        {t('Draufsicht', 'Top view')} · {cal.kw} {cursorWeek + 1} · {cal.moLong[Math.min(11, Math.floor(cursorWeek / 4.33))]} ({dimPair(fmt, bedLengthCm, bedWidthCm)})
       </div>
       <svg viewBox={`0 0 ${svgW} ${svgH}`} className="w-full rounded-[10px] border border-[rgba(255,255,255,0.08)] bg-bg" style={{ maxHeight: 280 }}>
         {Array.from({ length: Math.floor(bedLengthCm / 50) + 1 }).map((_, i) => (
@@ -401,6 +415,7 @@ function SideView({ plants, cursorWeek }: { plants: VisPlant[]; cursorWeek: numb
   const fmt = useFormat();
   const t = useT();
   const pname = usePlantName();
+  const cal = useCal();
   const maxH = Math.max(...plants.map(p => p.entry.heightCm), 50);
   const svgW = 400;
   const svgH = 200;
@@ -411,7 +426,7 @@ function SideView({ plants, cursorWeek }: { plants: VisPlant[]; cursorWeek: numb
   return (
     <div>
       <div className="font-sans text-[13px] font-semibold text-amber mb-1.5">
-        {t('Seitenansicht', 'Side view')} · KW {cursorWeek + 1} · {MONTHS[Math.min(11, Math.floor(cursorWeek / 4.33))]}
+        {t('Seitenansicht', 'Side view')} · {cal.kw} {cursorWeek + 1} · {cal.mo[Math.min(11, Math.floor(cursorWeek / 4.33))]}
       </div>
       <svg viewBox={`0 0 ${svgW} ${svgH}`} className="w-full rounded-[10px] border border-[rgba(255,255,255,0.08)] bg-bg" style={{ maxHeight: 200 }}>
         <line x1={0} y1={svgH - 20} x2={svgW} y2={svgH - 20} stroke="#4a3728" strokeWidth={3} />
@@ -456,26 +471,25 @@ function SideView({ plants, cursorWeek }: { plants: VisPlant[]; cursorWeek: numb
             </g>
           );
 
-          const imgW = Math.min(barW * 1.2, Math.max(h, 16));
-          const imgH = h;
           const isPast = stage.phase === 'past';
           const imgOpacity = isPast ? Math.max(0.15, stage.plantFraction * 0.8) : 0.92;
-          // The icon viewBox is 64×64 but the soil line sits at y=54 (not y=64).
-          // Extending the box by 10*scale pushes the icon down so the soil band
-          // lands exactly on baseY instead of floating above it.
-          const iconScale = Math.min(imgW, imgH) / 64;
-          const soilAdjust = 10 * iconScale;
+          // The icon canvas is 64px with its soil line at y=54. Render a SQUARE
+          // image (matching the square viewBox, so no preserveAspectRatio
+          // alignment is involved - WebKit and Blink resolve it differently for
+          // intrinsic-size-less SVGs) sized so the above-soil part of the icon
+          // equals the plant's scaled height, and anchor its soil line on baseY.
+          const iconSide = Math.max(16, Math.min(h * (64 / 54), barW * 1.5));
+          const iconY = baseY - iconSide * (54 / 64);
 
           return (
             <g key={e.plantId}>
               {uri ? (
                 <image
                   href={uri}
-                  x={x - imgW / 2}
-                  y={baseY - imgH}
-                  width={imgW}
-                  height={imgH + soilAdjust}
-                  preserveAspectRatio="xMidYMax meet"
+                  x={x - iconSide / 2}
+                  y={iconY}
+                  width={iconSide}
+                  height={iconSide}
                   opacity={imgOpacity}
                   style={isPast ? { filter: 'sepia(0.6) saturate(0.4)' } : undefined}
                 />
@@ -483,8 +497,8 @@ function SideView({ plants, cursorWeek }: { plants: VisPlant[]; cursorWeek: numb
                 <ellipse cx={x} cy={baseY - h / 2} rx={Math.min(barW * 0.4, h * 0.3)} ry={h / 2} fill={leafColor} opacity={isPast ? 0.25 : 0.45} stroke={leafColor} strokeWidth={1} />
               )}
               <text x={x} y={baseY + 14} fontSize={7} fill={isPast ? 'var(--c-sub)' : 'var(--c-text)'} textAnchor="middle" fontFamily="monospace" opacity={isPast ? 0.5 : 1}>{pname(e)}</text>
-              {!isPast && <text x={x} y={baseY - imgH - 3} fontSize={7} fill={leafColor} textAnchor="middle" fontFamily="monospace">{svgLen(fmt, e.heightCm * stage.plantFraction)}</text>}
-              {isPast && stage.plantFraction > 0.1 && <text x={x} y={baseY - imgH - 3} fontSize={6} fill="var(--c-sub)" textAnchor="middle" fontFamily="monospace" opacity={0.5}>{t('verblüht', 'spent')}</text>}
+              {!isPast && <text x={x} y={Math.min(iconY, baseY - h) - 3} fontSize={7} fill={leafColor} textAnchor="middle" fontFamily="monospace">{svgLen(fmt, e.heightCm * stage.plantFraction)}</text>}
+              {isPast && stage.plantFraction > 0.1 && <text x={x} y={Math.min(iconY, baseY - h) - 3} fontSize={6} fill="var(--c-sub)" textAnchor="middle" fontFamily="monospace" opacity={0.5}>{t('verblüht', 'spent')}</text>}
             </g>
           );
         })}
@@ -502,6 +516,7 @@ function GrowthTimeline({ plants, cursorWeek, setCursorWeek }: {
   const fmt = useFormat();
   const t = useT();
   const pname = usePlantName();
+  const cal = useCal();
   const mFrac = cursorWeek / 4.33;
   const m = mFrac + 1;
   const cursorMonthIdx = Math.min(11, Math.floor(mFrac));
@@ -523,13 +538,13 @@ function GrowthTimeline({ plants, cursorWeek, setCursorWeek }: {
             onChange={e => setCursorWeek(+e.target.value)}
             className="flex-1 accent-amber" />
           <span className="font-display text-[1.125rem] font-bold text-amber" style={{ minWidth: 130 }}>
-            KW {cursorWeek + 1} · {MONTHS_LONG[cursorMonthIdx]}
+            {cal.kw} {cursorWeek + 1} · {cal.moLong[cursorMonthIdx]}
           </span>
         </div>
 
         <div className="grid grid-cols-3 gap-2">
           <div className="rounded-lg p-[8px_10px] bg-[rgba(93,143,46,0.07)] border border-[rgba(93,143,46,0.2)]">
-            <div className="font-mono text-[11px] text-text-muted uppercase mb-1">{t('Erntereif', 'Ready to harvest')} · {MONTHS[cursorMonthIdx]}</div>
+            <div className="font-mono text-[11px] text-text-muted uppercase mb-1">{t('Erntereif', 'Ready to harvest')} · {cal.mo[cursorMonthIdx]}</div>
             {harvestableNow.length === 0
               ? <div className="font-sans text-[11px] text-text-muted">{t('Nichts erntereif', 'Nothing ready')}</div>
               : harvestableNow.map(p => {
@@ -550,7 +565,7 @@ function GrowthTimeline({ plants, cursorWeek, setCursorWeek }: {
               ? <div className="font-sans text-[11px] text-text-muted">{t('Nichts', 'Nothing')}</div>
               : indoorNow.map(p => (
                 <div key={p.entry.plantId} className="font-sans text-[11px] text-text mb-0.5">
-                  {pname(p.entry)} · {t('ab', 'plant out from')} {MONTHS[p.entry.sowOutdoorMonth - 1]} {t('auspflanzen', '')}
+                  {pname(p.entry)} · {t('ab', 'plant out from')} {cal.mo[p.entry.sowOutdoorMonth - 1]} {t('auspflanzen', '')}
                 </div>
               ))
             }
@@ -577,7 +592,7 @@ function GrowthTimeline({ plants, cursorWeek, setCursorWeek }: {
       <div className="grid mb-1" style={{ gridTemplateColumns: '110px 1fr' }}>
         <div />
         <div className="grid grid-cols-12">
-          {MONTHS.map((mo, i) => (
+          {cal.mo.map((mo, i) => (
             <div key={i} onClick={() => setCursorWeek(Math.round(i * 4.33))}
               className={`font-mono text-[11px] text-center pb-0.75 cursor-pointer border-b-2 ${i === cursorMonthIdx ? 'text-amber font-bold border-amber' : 'text-text-muted font-normal border-transparent'}`}
             >{mo}</div>
@@ -718,6 +733,7 @@ export default function BedVisualizer({ plants }: { plants: { entry: YieldEntry;
   const fmt = useFormat();
   const t = useT();
   const pname = usePlantName();
+  const cal = useCal();
   const { vname } = useVariety();
   // Bed dimensions stay internally in cm (SVG geometry); only the input display converts.
   const bedVal = (cm: number) => fmt.imperial ? Math.round(fmt.lenVal(cm) * 10) / 10 : cm;
@@ -781,11 +797,11 @@ export default function BedVisualizer({ plants }: { plants: { entry: YieldEntry;
           </label>
         </div>
         <div className="flex items-center gap-2 flex-1 min-w-50">
-          <span className="font-mono text-[11px] text-text-muted whitespace-nowrap">KW:</span>
+          <span className="font-mono text-[11px] text-text-muted whitespace-nowrap">{cal.kw}:</span>
           <input type="range" min={0} max={51} value={cursorWeek} onChange={e => setCursorWeek(+e.target.value)}
             className="flex-1 accent-amber" />
           <span className="font-display text-base font-bold text-amber" style={{ minWidth: 130 }}>
-            KW {cursorWeek + 1} · {MONTHS_LONG[Math.min(11, Math.floor(cursorWeek / 4.33))]}
+            {cal.kw} {cursorWeek + 1} · {cal.moLong[Math.min(11, Math.floor(cursorWeek / 4.33))]}
           </span>
         </div>
       </div>
