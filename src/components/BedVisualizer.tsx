@@ -50,6 +50,9 @@ interface VisPlant {
   selectedVarietyIdx: number;
 }
 
+// Selected variety's fruit color for a plant (undefined -> icon default palette).
+const varietyColor = (p: VisPlant) =>
+  PLANT_VISUAL_MAP.get(p.entry.plantId)?.varieties[p.selectedVarietyIdx]?.fruitColor;
 // ── Top-down bed view: the same plan drawn as true-scale canopies ─────────
 function BedTopView({ plan, plants, cursorWeek, onVarietyChange }: {
   plan: BedPlan;
@@ -197,7 +200,7 @@ function BedTopView({ plan, plants, cursorWeek, onVarietyChange }: {
           const phaseLabel = stage.phase === 'dormant' ? t('ruhend', 'dormant') : stage.phase === 'harvest' ? t('erntereif', 'ready to harvest') : stage.phase === 'indoor' ? t('Vorkultur', 'indoor start') : stage.phase === 'past' ? t('verblüht', 'spent') : t('wächst', 'growing');
           return (
             <div key={p.entry.plantId} className="flex items-center gap-1.5">
-              <PlantIcon plant={resolveIconKey(p.entry.plantId)} stage={stage.phase === 'dormant' ? 'aussaat' : stage.phase === 'indoor' ? 'keimling' : stage.phase === 'growing' ? 'jungpflanze' : 'reif'} size={20} />
+              <PlantIcon plant={resolveIconKey(p.entry.plantId)} stage={stage.phase === 'dormant' ? 'aussaat' : stage.phase === 'indoor' ? 'keimling' : stage.phase === 'growing' ? 'jungpflanze' : 'reif'} size={20} color={varietyColor(p)} />
               <span className="font-mono text-[11px] text-text">{pname(p.entry)}</span>
               <span className="font-mono text-[11px] text-text-muted">{p.count}x · {phaseLabel}</span>
             </div>
@@ -295,7 +298,7 @@ function SideView({ plants, cursorWeek }: { plants: VisPlant[]; cursorWeek: numb
             : stage.phase === 'indoor' ? 'keimling'
             : stage.phase === 'growing' ? 'jungpflanze'
             : 'reif';
-          const uri = getPlantDataUri(e.plantId, iconStage);
+          const uri = getPlantDataUri(e.plantId, iconStage, varietyColor(p));
 
           // Dormant: seed icon centered at soil line, visible
           if (stage.phase === 'dormant') {
@@ -401,7 +404,7 @@ function GrowthTimeline({ plants, cursorWeek, setCursorWeek }: {
                 const kgPerWeek = ((p.entry.yieldKgPerM2Low + p.entry.yieldKgPerM2High) / 2 / p.entry.harvestWindowWeeks * p.areaM2);
                 return (
                   <div key={p.entry.plantId} className="flex flex-wrap items-center gap-1 mb-0.5">
-                    <PlantIcon plant={resolveIconKey(p.entry.plantId)} stage="reif" size={16} />
+                    <PlantIcon plant={resolveIconKey(p.entry.plantId)} stage="reif" size={16} color={varietyColor(p)} />
                     <span className="font-sans text-[11px] text-text">{pname(p.entry)}</span>
                     <span className="font-mono text-[11px] text-text-muted ml-auto whitespace-nowrap">~{fmt.weightVal(kgPerWeek).toFixed(1)} {fmt.weightUnit}/{t('Wo', 'wk')}</span>
                   </div>
@@ -546,7 +549,7 @@ function PlantInfoPanel({ entry, selectedVarietyIdx }: { entry: YieldEntry; sele
     <div className="bg-card rounded-xl p-4" style={{ border: `2px solid ${(vis?.fruitColor ?? entry.color)}33` }}>
       <div className="flex items-center gap-2.5 mb-2.5">
         <div className="w-12 h-12 rounded-[10px] flex items-center justify-center shrink-0" style={{ background: (vis?.leafColor ?? '#3a7a2a') + '22' }}>
-          <PlantIcon plant={resolveIconKey(entry.plantId)} stage="reif" size={44} />
+          <PlantIcon plant={resolveIconKey(entry.plantId)} stage="reif" size={44} color={vis?.varieties[selectedVarietyIdx]?.fruitColor} />
         </div>
         <div>
           <h4 className="font-sans text-[1.125rem] font-extrabold text-text m-0">{pname(entry)}</h4>
@@ -765,7 +768,7 @@ export default function BedVisualizer({ plants }: { plants: { entry: YieldEntry;
               style={{ background: isSelected ? fruitColor + '18' : 'var(--c-bg)', border: `1px solid ${isSelected ? fruitColor + '66' : 'rgba(255,255,255,0.06)'}` }}>
               <button onClick={() => setSelectedPlantId(isSelected ? null : p.entry.plantId)}
                 className="flex items-center gap-1.5 cursor-pointer" style={{ background: 'none', border: 'none', padding: 0 }}>
-                <PlantIcon plant={resolveIconKey(p.entry.plantId)} stage="reif" size={20} />
+                <PlantIcon plant={resolveIconKey(p.entry.plantId)} stage="reif" size={20} color={varietyColor(p)} />
                 <span className="font-sans text-xs text-text">{pname(p.entry)}</span>
                 <span className="font-mono text-[11px] text-text-muted">{p.count}x</span>
               </button>
