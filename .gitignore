@@ -6,3 +6,10 @@ dist-ssr
 .vite
 node_modules/.tmp
 *.tsbuildinfo
+
+# Local and secret files
+.env
+__pycache__/
+.venv/
+*.pem
+.claude/settings.local.json
